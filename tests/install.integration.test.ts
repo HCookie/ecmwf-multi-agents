@@ -101,6 +101,7 @@ run_("install.sh with real opencode", () => {
     expect(doctor.code).toBe(0);
     expect(doctor.out).toContain("OK    lead is the harness's, with the plugin");
     expect(doctor.out).toContain("OK    lead's Review policy: auto");
+    expect(doctor.out).toContain("OK    max_helper_slots 4; lead's instruction: Run at most 4 helpers at once.");
     expect(doctor.out).toContain("OK    lead is the default agent");
     expect(install(box, ["uninstall"]).code).toBe(0);
     expect(ourFiles(box.config)).toEqual([]);
@@ -110,9 +111,12 @@ run_("install.sh with real opencode", () => {
   (V2_BIN ? test : test.skip)("doctor --project for a project whose plugins line names this checkout", () => {
     const box = sandbox(V2_BIN!);
     writeFileSync(path.join(box.project, "opencode.json"), `${JSON.stringify({ plugins: [REPO] })}\n`);
+    mkdirSync(path.join(box.project, ".opencode"));
+    writeFileSync(path.join(box.project, ".opencode", `${NAME}.jsonc`), '{ "max_helper_slots": 6 }\n');
     const doctor = install(box, ["doctor", "--project", box.project], box.project);
     expect(doctor.out).toContain(`OK    switched on by the plugins line in ${path.join(box.project, "opencode.json")}: ${REPO}`);
     expect(doctor.out).toContain(`OK    the checkout ${REPO} has the plugin folder`);
+    expect(doctor.out).toContain("OK    max_helper_slots 6; lead's instruction: Run at most 6 helpers at once.");
     expect(doctor.out).toContain("OK    lead is the harness's, with the plugin");
     expect(doctor.out).toContain("OK    lead is the default agent");
     expect(doctor.code).toBe(0);

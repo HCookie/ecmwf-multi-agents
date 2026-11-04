@@ -9,13 +9,13 @@
 //   doctor    the harness version, the default agent, whether lead is loaded and whether it is
 //             the harness's own (opencode does not say where an agent came from, so the lead it
 //             loaded is compared with the harness's, and the agent files and configs that could
-//             change it are listed), lead's "Review policy:" line, the effective settings and the
-//             file each comes from, the problems found, and the state of every plugin
+//             change it are listed), lead's review and helper limit instructions, the effective
+//             settings and the file each comes from, the problems found, and the state of every plugin
 //   problems  the problems found since the plugin loaded
 //   problem   an event published for each new problem; the TUI entry shows it (tui.ts)
 
 import path from "node:path";
-import { modelRef, planAgents, rewriteReviewLine } from "./apply.ts";
+import { helperSlotsLine, modelRef, planAgents, rewriteHelperSlotsLine, rewriteReviewLine } from "./apply.ts";
 import { parseJsonc } from "./jsonc.ts";
 import { rpcDefinition, type DoctorView, type ProblemView } from "./rpc-definition.ts";
 import { findRun } from "./rule-order.ts";
@@ -140,8 +140,8 @@ function sameModel(a: V2ModelRef | undefined, b: V2ModelRef | undefined): boolea
 
 /**
  * The fields in which the lead opencode loaded differs from the harness's own lead as the plugin
- * registers it and the settings then make it: the review line, model, effort and step limit the
- * settings choose. Rules after or before the harness's own are expected, from the user's config;
+ * registers it and the settings then make it: review policy, helper limit, model, effort and
+ * step limit. Rules after or before the harness's own are expected, from the user's config;
  * the harness's own must all be there, in order.
  */
 export function leadChanges(lead: V2AgentInfo, harness: EmbeddedHarness, settings: Settings, home: string): string[] {
@@ -150,7 +150,10 @@ export function leadChanges(lead: V2AgentInfo, harness: EmbeddedHarness, setting
   // An agent opencode creates starts as primary and not hidden (Agent.Info.default).
   const expected: V2AgentInfo = { id: embedded.id, mode: "primary", hidden: false, permissions: [] };
   applyAgent(expected, embedded, home);
-  if (typeof expected.system === "string") expected.system = rewriteReviewLine(expected.system, settings.review, embedded.id).prompt ?? expected.system;
+  if (typeof expected.system === "string") {
+    expected.system = rewriteReviewLine(expected.system, settings.review, embedded.id).prompt ?? expected.system;
+    expected.system = rewriteHelperSlotsLine(expected.system, settings.maxHelperSlots, embedded.id).prompt ?? expected.system;
+  }
   const plan = planAgents(harness, settings).plans.find((item) => item.id === embedded.id);
   const model = plan?.model === undefined ? undefined : modelRef(plan.model, plan.effort);
   if (plan?.steps !== undefined) expected.steps = plan.steps;
@@ -205,11 +208,13 @@ export async function doctorReport(input: DoctorInput): Promise<DoctorView> {
     leadCandidateFiles: agentFiles(harness.defaultAgent, input.environment, input.directory, input.projectRoot),
     leadConfigFiles: agentConfigFiles(harness.defaultAgent, input.environment, input.directory, input.projectRoot),
     reviewLine: (typeof lead?.system === "string" ? lead.system.split("\n").find((line) => line.startsWith("Review policy:")) : undefined) ?? null,
+    helperSlotsLine: typeof lead?.system === "string" ? helperSlotsLine(lead.system) : null,
     leadModel: modelText(lead),
     settings: {
       review: settings.review,
       profile: settings.profile,
       default_agent: settings.defaultAgent,
+      max_helper_slots: settings.maxHelperSlots,
       agents: settings.agents,
     },
     settingsFiles: loaded.applied,

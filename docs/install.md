@@ -68,6 +68,13 @@ The installer never overwrites a file it did not create. If one of your own file
 way, for example your own `commands/plan.md`, it is left alone and reported, the rest is
 installed, and the installer exits with an error so you notice.
 
+To change how many helpers `lead` may run at once, set `"max_helper_slots": 6` in
+`~/.config/opencode/ecmwf-multi-agents.jsonc`, or in a project's
+`.opencode/ecmwf-multi-agents.jsonc` to override it there. The default is 4; the value must be
+an integer of at least 1. More slots can run more builders, databases, dev servers and builds
+on the same machine, so raise it with care. `doctor` shows the setting and the instruction
+actually loaded into `lead`.
+
 ## Install for one project
 
 ```sh
@@ -112,7 +119,7 @@ commands and skills of your own or of the project, and a `default_agent` in a co
 win, as they do over installed files, with the two exceptions the README names under "Switch
 it on per project": the plugin's `/review` and `/progress` replace command files with those
 names, and the settings decide the model, effort and step limit of the harness agents and
-`lead`'s review line. Settings come from the same files as for an install:
+`lead`'s review line and helper limit. Settings come from the same files as for an install:
 `~/.config/opencode/ecmwf-multi-agents.jsonc` and the project's
 `.opencode/ecmwf-multi-agents.jsonc`.
 
@@ -310,6 +317,7 @@ Each line starts with OK, WARN or FAIL:
 - what opencode itself loaded, asked through the plugin with
   `opencode api --standalone` from the project folder (or the current folder without
   `--project`): whether `lead` is loaded and is the harness's own, its `Review policy:` line,
+  `max_helper_slots` and the helper limit in its instructions,
   the default agent, and every problem the plugin found, such as an ignored settings file.
   When `lead` differs from the harness's, a WARN names the fields that differ and the
   `lead.md` files and opencode configs with an `agents.lead` entry it may come from. A FAIL

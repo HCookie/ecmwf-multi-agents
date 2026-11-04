@@ -152,8 +152,8 @@ that project only. Your own agent files, commands, skills and `default_agent` st
 two exceptions. The plugin replaces `/review` and `/progress` after opencode has loaded the
 command files, so they answer in your session; a command file of your own with either name is
 not used. And the settings decide the model, effort and step limit of `lead`, `scout`, `builder`
-and `reviewer`, and `lead`'s review line: an agent file of yours with one of those names can
-change its other fields, but change these in the settings file. The settings files work as
+and `reviewer`, and `lead`'s review line and helper limit: an agent file of yours with one of
+those names can change its other fields, but change these in the settings file. The settings files work as
 below. To update, change the version in the line (or `git pull` the
 checkout) and restart opencode; an entry without a version is updated only by
 `opencode plugin update`.
@@ -173,6 +173,8 @@ in `.opencode/ecmwf-multi-agents.jsonc`.
   "review": "auto",
   // Which models the agents use: default, anthropic, copilot or inherit.
   "profile": "default",
+  // Helpers lead may run at once: an integer of at least 1, default 4.
+  "max_helper_slots": 4,
   // Optional per-agent overrides, applied after the profile: model, effort and steps.
   "agents": {
     "builder": { "effort": "xhigh" },
@@ -199,6 +201,11 @@ caps how many turns an agent may take, which limits its cost.
 | `anthropic` | Anthropic models only |
 | `copilot` | GitHub Copilot models only |
 | `inherit` | Every agent uses the model you pick in the session |
+
+`max_helper_slots` tells `lead` how many helpers may run at once, including during `/execute`
+and `/onboard`. More slots can run more builders, databases, dev servers and builds on the
+same machine, so raise it with care. `./install.sh doctor` shows the setting and the helper
+limit in the loaded lead's instructions.
 
 Settings are applied by a small plugin that ships with the harness, when opencode starts:
 restart opencode after a change. A settings file with a mistake is ignored, and opencode shows

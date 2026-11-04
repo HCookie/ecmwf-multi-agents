@@ -42,8 +42,9 @@ export interface DoctorView {
   /** opencode configs with an `agents.lead` (or `agent.lead`) entry, which may also explain a change. */
   leadConfigFiles: string[];
   reviewLine: string | null;
+  helperSlotsLine: string | null;
   leadModel: string | null;
-  settings: { review: string; profile: string; default_agent: boolean; agents: Record<string, unknown> };
+  settings: { review: string; profile: string; default_agent: boolean; max_helper_slots: number; agents: Record<string, unknown> };
   settingsFiles: string[];
   settingsSources: Record<string, string>;
   problems: ProblemView[];

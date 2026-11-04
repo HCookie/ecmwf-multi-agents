@@ -7,7 +7,7 @@
 // effort patterns with the plugin's own settings check (plugin/settings.ts), so an editor and
 // the plugin accept the same files.
 
-import { EFFORT_PATTERN, MODEL_PATTERN, SETTINGS_FILE } from "../plugin/settings.ts";
+import { DEFAULT_MAX_HELPER_SLOTS, EFFORT_PATTERN, MODEL_PATTERN, SETTINGS_FILE } from "../plugin/settings.ts";
 import { REVIEW_POLICIES } from "../plugin/types.ts";
 import { DEFAULT_REVIEW_POLICY } from "./resolve.ts";
 import type { ResolvedAgent, ResolvedHarness } from "./types.ts";
@@ -132,6 +132,13 @@ export function settingsSchema(harness: ResolvedHarness): JsonSchema {
           `default agent; you can still switch to ${lead} with Tab.`,
         type: "boolean",
         default: true,
+      },
+      max_helper_slots: {
+        title: "Helper slots",
+        description: `The most helpers ${lead} may run at once. Default: ${DEFAULT_MAX_HELPER_SLOTS}. Whole number of at least 1. More slots can run more builds, dev servers and databases on the same machine.`,
+        type: "integer",
+        minimum: 1,
+        default: DEFAULT_MAX_HELPER_SLOTS,
       },
       agents: {
         title: "Per-agent settings",

@@ -40,6 +40,13 @@
       "type": "boolean",
       "default": true
     },
+    "max_helper_slots": {
+      "title": "Helper slots",
+      "description": "The most helpers lead may run at once. Default: 4. Whole number of at least 1. More slots can run more builds, dev servers and databases on the same machine.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 4
+    },
     "agents": {
       "title": "Per-agent settings",
       "description": "Model, reasoning effort and step limit for single agents, applied after the profile.",

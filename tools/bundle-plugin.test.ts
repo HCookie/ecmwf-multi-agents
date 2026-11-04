@@ -5,8 +5,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { rewriteHelperSlotsLine } from "../plugin/apply.ts";
 import { helperIds } from "../plugin/helpers.ts";
 import { inlineCommands } from "../plugin/inline.ts";
+import { DEFAULT_MAX_HELPER_SLOTS } from "../plugin/settings.ts";
 import { resolvedFixture } from "../plugin/testing.ts";
 import { HARNESS_CONSTANT, bundlePlugin, embedHarness, matterContent, pluginMarker, runtimeImports } from "./bundle-plugin.ts";
 import { load } from "./load.ts";
@@ -78,7 +80,7 @@ describe("bundlePlugin", () => {
     writeFileSync(path.join(home, ".config", "opencode", "ecmwf-multi-agents.jsonc"), '{ "profile": "anthropic" }');
     writeFileSync(
       path.join(project, ".opencode", "ecmwf-multi-agents.jsonc"),
-      '{ "review": "never", "agents": { "scout": { "steps": 9, "effort": "high" } } }',
+      '{ "review": "never", "max_helper_slots": 7, "agents": { "scout": { "steps": 9, "effort": "high" } } }',
     );
     const script = `
       const plugin = (await import(${JSON.stringify(file)})).default;
@@ -102,7 +104,7 @@ describe("bundlePlugin", () => {
       };
       // The registration transform comes first, then opencode's loader for the agent files, then the late transform.
       transforms[0](editor);
-      editor.update("lead", (agent) => Object.assign(agent, { mode: "primary", system: "x\\nReview policy: auto\\ny" }));
+      editor.update("lead", (agent) => Object.assign(agent, { mode: "primary", system: "x\\nReview policy: auto\\nRun at most 4 helpers at once.\\ny" }));
       editor.update("scout", (agent) => Object.assign(agent, { mode: "subagent", steps: 15, model: { id: "claude-sonnet-5-5", providerID: "anthropic", variant: "medium" } }));
       editor.update("reviewer", (agent) => Object.assign(agent, { mode: "subagent", model: { id: "gpt-6.1-sol", providerID: "github-copilot", variant: "medium" } }));
       for (const transform of transforms.slice(1)) transform(editor);
@@ -125,7 +127,7 @@ describe("bundlePlugin", () => {
     expect(agents.reviewer).toMatchObject({ id: "reviewer", mode: "subagent", model: { id: "claude-opus-5-5", providerID: "anthropic", variant: "high" } });
     expect(agents.scout).toMatchObject({ id: "scout", mode: "subagent", steps: 9, model: { id: "claude-sonnet-5-5", providerID: "anthropic", variant: "high" } });
     expect(agents.builder).toMatchObject({ id: "builder", mode: "subagent", system: "You are builder.", steps: 60 });
-    expect(agents.lead!.system).toBe("x\nReview policy: never\ny");
+    expect(agents.lead!.system).toBe("x\nReview policy: never\nRun at most 7 helpers at once.\ny");
     expect(blocked).toContain("helpers may not use helpers_status");
   });
 });
@@ -163,6 +165,9 @@ describe("embedHarness", () => {
       ["progress", "scout"],
     ]);
     expect(inline[0]!.template).toContain("Target: $ARGUMENTS");
+    // Installed files without the plugin must carry the same default as the settings.
+    const lead = data.agents.find((agent) => agent.id === data.defaultAgent)!;
+    expect(rewriteHelperSlotsLine(lead.system!, DEFAULT_MAX_HELPER_SLOTS, lead.id)).toEqual({ prompt: lead.system! });
   });
 
   test("agents, commands and skills are what the generated files say, as opencode reads them", () => {

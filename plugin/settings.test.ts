@@ -112,6 +112,16 @@ describe("validateSettings", () => {
     expect(problemsOf({ default_agent: 1 })).toHaveLength(1);
   });
 
+  test("max_helper_slots is a whole number of at least 1", () => {
+    for (const max_helper_slots of [1, 4, 8, 100]) {
+      expect(validateSettings({ max_helper_slots }, harness)).toEqual({ settings: { max_helper_slots }, problems: [] });
+    }
+    for (const max_helper_slots of [0, -1, 1.5, "4", null, true, [], {}, Infinity, NaN]) {
+      expect(problemsOf({ max_helper_slots })).toHaveLength(1);
+      expect(problemsOf({ max_helper_slots })[0]).toContain('"max_helper_slots" must be a whole number of at least 1');
+    }
+  });
+
   test("agents is an object keyed by known agents, each an object", () => {
     expect(problemsOf({ agents: [] })).toEqual(['"agents" must be an object that maps agent names to settings, not []']);
     expect(problemsOf({ agents: { build: {} } })).toEqual([
@@ -149,7 +159,7 @@ describe("validateSettings", () => {
     expect(problemsOf({ agents: { reviewer: { model: "openai/gpt-6.1-sol", variant: "high" } } })).toEqual([
       '"agents.reviewer" has the unknown key "variant"; it is now called "effort"',
     ]);
-    expect(problemsOf({ variant: "high" })).toEqual(['unknown setting "variant"; the settings are $schema, review, profile, default_agent and agents']);
+    expect(problemsOf({ variant: "high" })).toEqual(['unknown setting "variant"; the settings are $schema, review, profile, default_agent, max_helper_slots and agents']);
   });
 
   test("steps is a whole number of at least 1", () => {
@@ -162,7 +172,7 @@ describe("validateSettings", () => {
   });
 
   test("no other keys, at the top or in an agent", () => {
-    expect(problemsOf({ reviews: "auto" })).toEqual(['unknown setting "reviews"; the settings are $schema, review, profile, default_agent and agents']);
+    expect(problemsOf({ reviews: "auto" })).toEqual(['unknown setting "reviews"; the settings are $schema, review, profile, default_agent, max_helper_slots and agents']);
     expect(problemsOf({ agents: { scout: { temperature: 0.2 } } })).toEqual([
       '"agents.scout" has the unknown setting "temperature"; an agent takes model, effort or steps',
     ]);
@@ -175,7 +185,7 @@ describe("validateSettings", () => {
 
 describe("mergeSettings", () => {
   test("defaults: review auto, the harness's default profile, lead as default agent", () => {
-    expect(mergeSettings([], harness)).toEqual({ review: "auto", reviewSet: false, profile: "default", defaultAgent: true, agents: {} });
+    expect(mergeSettings([], harness)).toEqual({ review: "auto", reviewSet: false, profile: "default", defaultAgent: true, maxHelperSlots: 4, maxHelperSlotsSet: false, agents: {} });
   });
 
   test("later files win; agents merge per agent and per field", () => {
@@ -192,6 +202,8 @@ describe("mergeSettings", () => {
       reviewSet: true,
       profile: "anthropic",
       defaultAgent: false,
+      maxHelperSlots: 4,
+      maxHelperSlotsSet: false,
       agents: {
         reviewer: { model: "openai/gpt-x", effort: "low", steps: 12 },
         scout: { steps: 5 },
@@ -221,6 +233,8 @@ describe("loadSettings", () => {
       reviewSet: true,
       profile: "copilot",
       defaultAgent: true,
+      maxHelperSlots: 4,
+      maxHelperSlotsSet: false,
       agents: { scout: { steps: 7, effort: "low" }, reviewer: { steps: 9 } },
     });
     expect(loaded.sources).toEqual({
@@ -235,6 +249,29 @@ describe("loadSettings", () => {
   test("missing files are skipped silently", () => {
     const loaded = loadSettings(harness, fakeEnvironment({}, env), "/repo");
     expect(loaded).toEqual({ settings: mergeSettings([], harness), problems: [], applied: [], sources: {} });
+  });
+
+  test("helper slots follow site, global and project precedence, with the winning source", () => {
+    const files = { [site]: '{ "max_helper_slots": 8 }', [global]: '{ "max_helper_slots": 6 }', [project]: '{ "max_helper_slots": 1 }' };
+    const loaded = loadSettings(harness, fakeEnvironment(files, env), "/repo");
+    expect(loaded.settings).toMatchObject({ maxHelperSlots: 1, maxHelperSlotsSet: true });
+    expect(loaded.sources.max_helper_slots).toBe(project);
+    const globalOnly = loadSettings(harness, fakeEnvironment(files, env), undefined);
+    expect(globalOnly.settings.maxHelperSlots).toBe(6);
+    expect(globalOnly.sources.max_helper_slots).toBe(global);
+    const omitted = loadSettings(harness, fakeEnvironment({ ...files, [project]: '{ "review": "never" }' }, env), "/repo");
+    expect(omitted.settings.maxHelperSlots).toBe(6);
+  });
+
+  test("an invalid helper limit ignores the whole project file and keeps the global limit", () => {
+    const loaded = loadSettings(harness, fakeEnvironment({
+      [global]: '{ "max_helper_slots": 6, "review": "never" }',
+      [project]: '{ "max_helper_slots": 0, "review": "always" }',
+    }, env), "/repo");
+    expect(loaded.settings).toMatchObject({ maxHelperSlots: 6, review: "never" });
+    expect(loaded.sources.max_helper_slots).toBe(global);
+    expect(loaded.applied).toEqual([global]);
+    expect(loaded.problems).toEqual([{ message: `ecmwf-multi-agents: ignoring ${project}: "max_helper_slots" must be a whole number of at least 1, not 0`, notify: true }]);
   });
 
   test("an invalid file is ignored entirely and reported with its path; the others still apply", () => {

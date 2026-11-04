@@ -198,7 +198,7 @@ describe("v2 setup", () => {
   });
 
   test("the agent files win until the late transform registers on plugin.updated, then the settings win", async () => {
-    const { host } = await start({ [PROJECT]: '{ "profile": "anthropic", "review": "always", "agents": { "scout": { "steps": 9 } } }' });
+    const { host } = await start({ [PROJECT]: '{ "profile": "anthropic", "review": "always", "max_helper_slots": 8, "agents": { "scout": { "steps": 9 } } }' });
     host.loader();
     expect(host.build().agents.get("reviewer")!.model!.providerID).toBe("github-copilot");
 
@@ -208,6 +208,7 @@ describe("v2 setup", () => {
     expect(state.agents.get("reviewer")!.model).toEqual({ id: "claude-opus-5-5", providerID: "anthropic", variant: "high" });
     expect(state.agents.get("scout")!.steps).toBe(9);
     expect(state.agents.get("lead")!.system).toContain("Review policy: always");
+    expect(state.agents.get("lead")!.system).toContain("Run at most 8 helpers at once.");
     expect(state.default).toBe("lead");
   });
 
@@ -312,7 +313,10 @@ describe("v2 setup", () => {
     await settle();
     host.build();
     host.build();
-    expect(write).toEqual(['ecmwf-multi-agents: the prompt of lead has no "Review policy:" line, so the review policy stays as the prompt says']);
+    expect(write).toEqual([
+      'ecmwf-multi-agents: the prompt of lead has no "Review policy:" line, so the review policy stays as the prompt says',
+      'ecmwf-multi-agents: the prompt of lead has no "Run at most ... helpers at once." instruction; max_helper_slots was not applied',
+    ]);
   });
 
   test("fail safe: a throwing editor never escapes the transform", async () => {

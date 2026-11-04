@@ -126,6 +126,18 @@ function planAgents(harness, settings) {
   return { plans, problems };
 }
 var REVIEW_LINE = /^Review policy:[^\r\n]*/gm;
+var HELPER_SLOTS_LINE = /^Run at most \S+ helpers? at once\./gm;
+function helperSlotsLine(prompt) {
+  const matches = prompt.match(HELPER_SLOTS_LINE) ?? [];
+  return matches.length === 1 ? matches[0] : null;
+}
+function rewriteHelperSlotsLine(prompt, slots, agent) {
+  const count = prompt.match(HELPER_SLOTS_LINE)?.length ?? 0;
+  if (count !== 1) {
+    return { problem: `the prompt of ${agent} has ${count === 0 ? "no" : count} "Run at most ... helpers at once." instruction${count > 1 ? "s" : ""}; max_helper_slots was not applied` };
+  }
+  return { prompt: prompt.replace(HELPER_SLOTS_LINE, `Run at most ${slots} ${slots === 1 ? "helper" : "helpers"} at once.`) };
+}
 function rewriteReviewLine(prompt, policy, agent) {
   const count = prompt.match(REVIEW_LINE)?.length ?? 0;
   if (count === 0)
@@ -166,10 +178,15 @@ function applyToV2Agents(editor, harness, settings, plans) {
       const result = rewriteReviewLine(lead.system, settings.review, harness.defaultAgent);
       if (result.problem !== undefined)
         problems.push(reviewProblem(harness, settings, result.problem));
-      else
-        changes.push(() => editor.update(harness.defaultAgent, (agent) => agent.system = result.prompt));
+      const slots = rewriteHelperSlotsLine(result.prompt ?? lead.system, settings.maxHelperSlots, harness.defaultAgent);
+      if (slots.problem !== undefined)
+        problems.push({ message: `${harness.name}: ${slots.problem}`, notify: settings.maxHelperSlotsSet });
+      const prompt = slots.prompt ?? result.prompt;
+      if (prompt !== undefined)
+        changes.push(() => editor.update(harness.defaultAgent, (agent) => agent.system = prompt));
     } else {
       problems.push(reviewProblem(harness, settings, `${harness.defaultAgent} has no prompt, so the review policy was not applied`));
+      problems.push({ message: `${harness.name}: ${harness.defaultAgent} has no prompt, so max_helper_slots was not applied`, notify: settings.maxHelperSlotsSet });
     }
   }
   for (const change of changes)
@@ -1539,8 +1556,10 @@ function leadChanges(lead, harness, settings, home) {
     return [];
   const expected = { id: embedded.id, mode: "primary", hidden: false, permissions: [] };
   applyAgent(expected, embedded, home);
-  if (typeof expected.system === "string")
+  if (typeof expected.system === "string") {
     expected.system = rewriteReviewLine(expected.system, settings.review, embedded.id).prompt ?? expected.system;
+    expected.system = rewriteHelperSlotsLine(expected.system, settings.maxHelperSlots, embedded.id).prompt ?? expected.system;
+  }
   const plan = planAgents(harness, settings).plans.find((item) => item.id === embedded.id);
   const model = plan?.model === undefined ? undefined : modelRef(plan.model, plan.effort);
   if (plan?.steps !== undefined)
@@ -1598,11 +1617,13 @@ async function doctorReport(input) {
     leadConfigFiles: agentConfigFiles(harness.defaultAgent, input.environment, input.directory, input.projectRoot),
     reviewLine: (typeof lead?.system === "string" ? lead.system.split(`
 `).find((line) => line.startsWith("Review policy:")) : undefined) ?? null,
+    helperSlotsLine: typeof lead?.system === "string" ? helperSlotsLine(lead.system) : null,
     leadModel: modelText(lead),
     settings: {
       review: settings.review,
       profile: settings.profile,
       default_agent: settings.defaultAgent,
+      max_helper_slots: settings.maxHelperSlots,
       agents: settings.agents
     },
     settingsFiles: loaded.applied,
@@ -1639,9 +1660,10 @@ var REVIEW_POLICIES = ["auto", "ask", "always", "never"];
 
 // plugin/settings.ts
 var SETTINGS_FILE = "ecmwf-multi-agents.jsonc";
+var DEFAULT_MAX_HELPER_SLOTS = 4;
 var MODEL_PATTERN = /^[^/#\s]+\/[^#\s]+$/;
 var EFFORT_PATTERN = /^[^#\s]+$/;
-var TOP_KEYS = ["$schema", "review", "profile", "default_agent", "agents"];
+var TOP_KEYS = ["$schema", "review", "profile", "default_agent", "max_helper_slots", "agents"];
 var AGENT_KEYS = ["model", "effort", "steps"];
 var RENAMED_AGENT_KEYS = { variant: "effort" };
 function listWords(words, last = "or") {
@@ -1733,6 +1755,12 @@ function validateSettings(value, harness) {
         settings.agents = agents;
         break;
       }
+      case "max_helper_slots":
+        if (typeof item === "number" && Number.isInteger(item) && item >= 1)
+          settings.max_helper_slots = item;
+        else
+          problems.push(`"max_helper_slots" must be a whole number of at least 1, not ${shown(item)}`);
+        break;
       default:
         problems.push(`unknown setting ${shown(key)}; the settings are ${listWords(TOP_KEYS, "and")}`);
     }
@@ -1777,6 +1805,8 @@ function mergeSettings(files, harness) {
     reviewSet: false,
     profile: harness.defaultProfile,
     defaultAgent: true,
+    maxHelperSlots: DEFAULT_MAX_HELPER_SLOTS,
+    maxHelperSlotsSet: false,
     agents: {}
   };
   for (const file of files) {
@@ -1788,6 +1818,10 @@ function mergeSettings(files, harness) {
       settings.profile = file.profile;
     if (file.default_agent !== undefined)
       settings.defaultAgent = file.default_agent;
+    if (file.max_helper_slots !== undefined) {
+      settings.maxHelperSlots = file.max_helper_slots;
+      settings.maxHelperSlotsSet = true;
+    }
     for (const [id, override] of Object.entries(file.agents ?? {})) {
       settings.agents[id] = { ...settings.agents[id], ...override };
     }
@@ -1804,6 +1838,8 @@ function settingSources(files, applied) {
       sources.profile = from;
     if (file.default_agent !== undefined)
       sources.default_agent = from;
+    if (file.max_helper_slots !== undefined)
+      sources.max_helper_slots = from;
     for (const [id, override] of Object.entries(file.agents ?? {})) {
       for (const key of Object.keys(override))
         sources[`agents.${id}.${key}`] = from;
@@ -2305,7 +2341,7 @@ Start a helper with your delegation tool; your brief is its whole prompt.
 
 When a builder's task fails or is only partly done, brief builder again: state the gap exactly, and say in CONTEXT what the earlier attempt changed and why it fell short. If it fails again, take it to the user with what was tried and the options: a higher builder effort in the settings, or you taking the task over. When a scout cannot answer, brief a scout again with what it missed and a wider scope; if that fails too, ask the user. Scouts cannot run code: run it yourself or brief a builder to run it and change nothing.
 
-Run at most three helpers at once. Run scouts in parallel when their questions are independent, and builders only when their files do not overlap. Start parallel helpers in the same turn.
+Run at most 4 helpers at once. Run scouts in parallel when their questions are independent, and builders only when their files do not overlap. Start parallel helpers in the same turn.
 
 ## Background helpers
 
@@ -2410,11 +2446,11 @@ Focus area (may be empty): $ARGUMENTS
 
 1. Read \`.ecmwf-multi-agents/context/onboard.md\` by exact path, if it exists. It is current when the hash on its \`Commit:\` line matches \`git rev-parse HEAD\`, or when it says \`none\` and there is no commit.
 2. Current and no focus area: give the user a short recap from it and stop. Current with a focus area: go to step 4.
-3. Otherwise start three scouts in parallel, in one turn:
+3. Otherwise brief three scouts, running them in parallel up to the helper limit in your instructions:
    - Purpose and intent from README, AGENTS.md, CONTRIBUTING and docs; rules for contributors; docs that look stale.
    - Layout, entry points and main flow; the exact build, test and lint commands.
    - Conventions, recent direction from the changelog, open work and recent commits.
-4. With a focus area, send one more scout to study it in depth, after any other scouts have finished (at most three helpers run at once).
+4. With a focus area, send one more scout to study it in depth, after any other scouts have finished.
 5. After the git exclude check in your instructions, write or update \`.ecmwf-multi-agents/context/onboard.md\`. First line: \`Commit: <hash> (<date>)\` from \`git log -1 --format='%H (%cs)'\`, or \`Commit: none\` outside git or before the first commit. Then these sections, each short, with \`path:line\` evidence where useful:
    1. Purpose
    2. Architecture
@@ -2491,7 +2527,7 @@ Status is one of draft, approved, in progress, done, stopped. Context holds deci
 ## Carrying out a plan
 
 1. Read the plan by exact path. Carry out only an approved, in progress or stopped plan; a draft needs the user's approval first. When resuming, read the log and check \`git status\` for unfinished work. A plan still \`in progress\` from another session may have helpers running there: ask the user, and carry on only once they have finished. Set status \`in progress\` and add a log line.
-2. The ready tasks are the open ones whose dependencies are ticked. Take as many of them as there are free helper slots, at most three helpers at once, and never two that touch the same file: a task whose files overlap with a running or taken task waits, even if it is ready. The plan's Parallel line names the sets that may run together; check the Files lines when in doubt.
+2. The ready tasks are the open ones whose dependencies are ticked. Take as many as there are free helper slots, up to the helper limit in your instructions, and never two that touch the same file: a task whose files overlap with a running or taken task waits, even if it is ready. The plan's Parallel line names the sets that may run together; check the Files lines when in doubt.
 3. Brief each taken task from its own lines plus the plan's context and goal. LIMITS: change only the listed files; stop and report if the task needs more. Hand off in the background when two or more are taken, or when the user may want to keep talking; otherwise one task runs in the foreground.
 4. Answer the user first, even if a completion arrives while you look up the answer; then read every completion that has arrived before starting new work. Check each report against its DONE WHEN items and re-run cheap checks yourself; a check that reads the whole repository (the full test suite) waits until no builder is running.
 5. On a failure, stop if the task has now failed twice or this is the third failed report in a row; otherwise log it and brief the same agent again with the gap stated exactly, the same way as the first attempt, saying for a builder what the earlier attempt changed. On success, tick the task, add a dated log line, put a scout task's findings in the context, tell the user in one line, and fill the free helper slots from the ready tasks not yet running, with the same file rule. Never brief a task whose helper is still running.
@@ -2500,7 +2536,7 @@ Status is one of draft, approved, in progress, done, stopped. Context holds deci
 8. Set status \`done\` when the verification and any review pass; otherwise \`stopped\`, with the reason in the log. Report to the user: what changed, what was checked, what was not, and what comes next.
 
 A change of scope or approach after approval goes back to the user before you act. Record the decision in the plan's context and log.
-`, description: "Plan file format and rules for ecmwf-multi-agents. Use when writing, updating or carrying out a plan in .ecmwf-multi-agents/plans/.", autoinvoke: false }, { id: "ecmwf-multi-agents-guide", name: "ecmwf-multi-agents-guide", content: "\n# ecmwf-multi-agents guide\n\nAnswer the user's questions about the harness from this guide, which speaks to the user. Answer only what was asked, in plain words.\n\n## The idea\n\nYou talk to one agent, `lead`. It works out what you need, asks when something is unclear, plans bigger work and hands reading, building and checking to helpers. Helpers work from a written brief, return a short report and never ask you anything, so `lead` keeps its memory for your conversation.\n\n## The agents\n\n- `lead`: talks to you, plans, hands out work, checks results, commits when asked.\n- `scout`: read-only lookups and investigations in code, docs and the web.\n- `builder`: makes one clearly specified change and runs its checks.\n- `reviewer`: independent APPROVE or REJECT on plans and changes.\n\n`lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper ones, so sessions cost less. Where the profile allows, the reviewer uses a different model family, to catch mistakes the others share.\n\n## Commands and typical use\n\n- New repository: start with `/onboard` (`/onboard <focus>` looks closer at one area). `lead` surveys the code and keeps a short summary for later sessions.\n- A question or a small change: just ask.\n- Bigger work: `/plan <goal>`. `lead` asks questions, investigates, writes a plan and waits. Approve it or ask for changes, then run `/execute`, ideally in a fresh session: the plan file holds everything needed. `/execute` runs ready tasks, several at once in the background, ticks each as its report arrives, and stops when it needs you; you can talk to `lead` meanwhile.\n- `/progress [plan]`: how far the current plan has got.\n- `/review [target]`: independent review, under any policy, of your uncommitted changes (no target), a branch, a pull request (number or URL) or a plan file. It replaces opencode's own `/review`.\n- `/guide [question]`: this guide.\n\nA project's own command or agent with the same name, such as its own `/onboard`, takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide a harness agent's model, effort and steps, and the review policy.\n\n## Review policy\n\n- `auto` (default): reviews plans before you approve them, and changes beyond trivial edits.\n- `ask`: `lead` asks you before each review.\n- `always`: reviews every plan and every change.\n- `never`: reviews only when you ask, for example with `/review`.\n\nAfter a REJECT the problems are fixed and checked again, at most twice; then `lead` brings what is left to you.\n\n## Settings\n\nSettings live in `~/.config/opencode/ecmwf-multi-agents.jsonc`. A project can override them in `.opencode/ecmwf-multi-agents.jsonc`. Restart opencode after a change.\n\n```jsonc\n{\n  \"review\": \"auto\", // auto, ask, always or never\n  \"profile\": \"default\", // default, anthropic, copilot or inherit\n  \"default_agent\": true, // start opencode on lead\n  \"agents\": { // per-agent overrides, after the profile\n    \"builder\": { \"effort\": \"xhigh\" },\n    \"reviewer\": { \"model\": \"provider/model-name\", \"steps\": 40 }\n  }\n}\n```\n\nEach agent takes `model`, `effort` and `steps`. Effort is how hard a model thinks: more effort is slower and costs more. Values: `low`, `medium`, `high`, `xhigh`, `max`; some models also `none`. Defaults: `lead` xhigh, `builder` high, `scout` and reviewer medium. Effort needs a model, so under `inherit` set `model` too. `steps` caps an agent's turns, which limits cost.\n\nProfiles give each agent a model and an effort:\n\n- `default`: Anthropic for `lead`, `scout` and `builder`; GitHub Copilot for the reviewer. Needs both connected.\n- `anthropic`: Anthropic only; the reviewer uses the strongest model.\n- `copilot`: GitHub Copilot only.\n- `inherit`: every agent uses the model you pick in the session.\n\n## Helpers in the background\n\n`lead` usually waits for a helper. When it has other work meanwhile, or you may want to keep talking, it hands off in the background and the report arrives later in your conversation. If `lead` is waiting on a helper and you want it back, press Ctrl+B to move the hand-off to the background.\n\nIf a helper is doing something you do not want, tell `lead`: \"redirect the scout: stay in src/\" or \"stop the builder\". `lead` can list its helpers, send one an amendment it reads at its next step, keeping what it has read, or stop one. You cannot type in a helper's session yourself. A stopped helper reports nothing; its changes stay on disk.\n\n## Work files\n\nPlans, scout notes and the onboarding summary live in `.ecmwf-multi-agents/` at the top of the repository, kept out of git by `.git/info/exclude`.\n\n## Safety\n\n- Agents commit only when you ask.\n- Pushing, opening or merging a pull request, rewriting history and discarding changes always ask for your approval.\n- Helpers cannot commit, push or rewrite history. Scouts write only their notes; the reviewer changes no files.\n- The harness never asks for credentials. Never paste passwords or tokens into the chat.\n\n## Troubleshooting\n\n- Run `./install.sh doctor` in the harness checkout (the folder you cloned) to check versions, installed files, settings and models. Invalid settings are ignored until fixed; doctor shows why.\n- A model is missing: connect its provider with `opencode auth login`, or pick another profile, then restart opencode.\n- opencode starts on `build`, not `lead`: the plugin did not load, `default_agent` is false, or your opencode config names another default agent. Switch with `/agents`. Without the plugin the agents work with default settings.\n- To update, run `git pull` in the checkout and restart opencode.\n", description: "User guide to the ecmwf-multi-agents harness: agents, commands, plans, review policy, settings and profiles. Use when the user asks how the harness works.", autoinvoke: false }] });
+`, description: "Plan file format and rules for ecmwf-multi-agents. Use when writing, updating or carrying out a plan in .ecmwf-multi-agents/plans/.", autoinvoke: false }, { id: "ecmwf-multi-agents-guide", name: "ecmwf-multi-agents-guide", content: "\n# ecmwf-multi-agents guide\n\nAnswer the user's questions about the harness from this guide, which speaks to the user. Answer only what was asked, in plain words.\n\n## The idea\n\nYou talk to one agent, `lead`. It works out what you need, asks when something is unclear, plans bigger work and hands reading, building and checking to helpers. Helpers work from a written brief, return a short report and never ask you anything, so `lead` keeps its memory for your conversation.\n\n## The agents\n\n- `lead`: talks to you, plans, hands out work, checks results, commits when asked.\n- `scout`: read-only lookups and investigations in code, docs and the web.\n- `builder`: makes one clearly specified change and runs its checks.\n- `reviewer`: independent APPROVE or REJECT on plans and changes.\n\n`lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper ones, so sessions cost less. Where the profile allows, the reviewer uses a different model family, to catch mistakes the others share.\n\n## Commands and typical use\n\n- New repository: start with `/onboard` (`/onboard <focus>` looks closer at one area). `lead` surveys the code and keeps a short summary for later sessions.\n- A question or a small change: just ask.\n- Bigger work: `/plan <goal>`. `lead` asks questions, investigates, writes a plan and waits. Approve it or ask for changes, then run `/execute`, ideally in a fresh session: the plan file holds everything needed. `/execute` runs ready tasks, several at once in the background, ticks each as its report arrives, and stops when it needs you; you can talk to `lead` meanwhile.\n- `/progress [plan]`: how far the current plan has got.\n- `/review [target]`: independent review, under any policy, of your uncommitted changes (no target), a branch, a pull request (number or URL) or a plan file. It replaces opencode's own `/review`.\n- `/guide [question]`: this guide.\n\nA project's own command or agent with the same name, such as its own `/onboard`, takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide a harness agent's model, effort and steps, the review policy and helper limit.\n\n## Review policy\n\n- `auto` (default): reviews plans before you approve them, and changes beyond trivial edits.\n- `ask`: `lead` asks you before each review.\n- `always`: reviews every plan and every change.\n- `never`: reviews only when you ask, for example with `/review`.\n\nAfter a REJECT the problems are fixed and checked again, at most twice; then `lead` brings what is left to you.\n\n## Settings\n\nSettings live in `~/.config/opencode/ecmwf-multi-agents.jsonc`. A project can override them in `.opencode/ecmwf-multi-agents.jsonc`. Restart opencode after a change.\n\n```jsonc\n{\n  \"review\": \"auto\", // auto, ask, always or never\n  \"profile\": \"default\", // default, anthropic, copilot or inherit\n  \"default_agent\": true, // start opencode on lead\n  \"max_helper_slots\": 4, // helpers at once, integer at least 1\n  \"agents\": { // per-agent overrides, after the profile\n    \"builder\": { \"effort\": \"xhigh\" },\n    \"reviewer\": { \"model\": \"provider/model-name\", \"steps\": 40 }\n  }\n}\n```\n\nEach agent takes `model`, `effort` and `steps`. Effort is how hard a model thinks: more effort is slower and costs more. Values: `low`, `medium`, `high`, `xhigh`, `max`; some models also `none`. Defaults: `lead` xhigh, `builder` high, `scout` and reviewer medium. Effort needs a model, so under `inherit` set `model` too. `steps` caps an agent's turns, which limits cost.\n\n`max_helper_slots` tells `lead` how many helpers may run at once (default 4). More slots can run more builders, databases, dev servers and builds on the same machine; raise it with care. `/execute` and `/onboard` follow this limit.\n\nProfiles give each agent a model and an effort:\n\n- `default`: Anthropic for `lead`, `scout` and `builder`; GitHub Copilot for the reviewer. Needs both connected.\n- `anthropic`: Anthropic only; the reviewer uses the strongest model.\n- `copilot`: GitHub Copilot only.\n- `inherit`: every agent uses the model you pick in the session.\n\n## Helpers in the background\n\n`lead` usually waits for a helper. When it has other work meanwhile, or you may want to keep talking, it hands off in the background and the report arrives later in your conversation. If `lead` is waiting on a helper and you want it back, press Ctrl+B to move the hand-off to the background.\n\nIf a helper is doing something you do not want, tell `lead`: \"redirect the scout: stay in src/\" or \"stop the builder\". `lead` can list its helpers, send one an amendment it reads at its next step, keeping what it has read, or stop one. You cannot type in a helper's session yourself. A stopped helper reports nothing; its changes stay on disk.\n\n## Work files\n\nPlans, scout notes and the onboarding summary live in `.ecmwf-multi-agents/` at the top of the repository, kept out of git by `.git/info/exclude`.\n\n## Safety\n\n- Agents commit only when you ask.\n- Pushing, opening or merging a pull request, rewriting history and discarding changes always ask for your approval.\n- Helpers cannot commit, push or rewrite history. Scouts write only their notes; the reviewer changes no files.\n- The harness never asks for credentials. Never paste passwords or tokens into the chat.\n\n## Troubleshooting\n\n- Run `./install.sh doctor` in the harness checkout (the folder you cloned) to check versions, installed files, settings and models. Invalid settings are ignored until fixed; doctor shows why.\n- A model is missing: connect its provider with `opencode auth login`, or pick another profile, then restart opencode.\n- opencode starts on `build`, not `lead`: the plugin did not load, `default_agent` is false, or your opencode config names another default agent. Switch with `/agents`. Without the plugin the agents work with default settings.\n- To update, run `git pull` in the checkout and restart opencode.\n", description: "User guide to the ecmwf-multi-agents harness: agents, commands, plans, review policy, settings and profiles. Use when the user asks how the harness works.", autoinvoke: false }] });
 export {
   plugin_default as default
 };

@@ -99,6 +99,9 @@ const GOOD: unknown[] = [
   { $schema: "./ecmwf-multi-agents/schema.json" },
   { review: "never", profile: "inherit", default_agent: false },
   { review: "ask" },
+  { max_helper_slots: 1 },
+  { max_helper_slots: 4 },
+  { max_helper_slots: 16 },
   { agents: { scout: { model: "openai/gpt-6.1-sol", effort: "high", steps: 20 } } },
   // An override may change only the effort, keeping the profile's model.
   { agents: { lead: { effort: "low" } } },
@@ -113,6 +116,12 @@ const BAD: [unknown, string][] = [
   [{ review: 1 }, "$.review: type"],
   [{ profile: "fast" }, "$.profile: enum"],
   [{ default_agent: "yes" }, "$.default_agent: type"],
+  [{ max_helper_slots: 0 }, "$.max_helper_slots: minimum"],
+  [{ max_helper_slots: -1 }, "$.max_helper_slots: minimum"],
+  [{ max_helper_slots: 2.5 }, "$.max_helper_slots: type"],
+  [{ max_helper_slots: "4" }, "$.max_helper_slots: type"],
+  [{ max_helper_slots: true }, "$.max_helper_slots: type"],
+  [{ max_helper_slots: null }, "$.max_helper_slots: type"],
   [{ agents: [] }, "$.agents: type"],
   [{ agents: { boss: {} } }, "$.agents.boss: additionalProperties"],
   [{ agents: { scout: "fast" } }, "$.agents.scout: type"],
@@ -175,11 +184,12 @@ describe("settings schema", () => {
   });
 
   test("lists the settings, policies, profiles and agents", () => {
-    expect(Object.keys(sub(schema, "properties"))).toEqual(["$schema", "review", "profile", "default_agent", "agents"]);
+    expect(Object.keys(sub(schema, "properties"))).toEqual(["$schema", "review", "profile", "default_agent", "max_helper_slots", "agents"]);
     expect(sub(schema, "properties", "$schema").type).toBe("string");
     expect(sub(schema, "properties", "review").enum).toEqual(["auto", "ask", "always", "never"]);
     expect(sub(schema, "properties", "profile").enum).toEqual(["default", "inherit"]);
     expect(sub(schema, "properties", "default_agent").type).toBe("boolean");
+    expect(sub(schema, "properties", "max_helper_slots")).toMatchObject({ type: "integer", minimum: 1, default: 4 });
     expect(Object.keys(sub(schema, "properties", "agents", "properties"))).toEqual(["lead", "scout"]);
     expect(Object.keys(sub(schema, "properties", "agents", "properties", "scout", "properties"))).toEqual([
       "model",

@@ -1404,6 +1404,12 @@ doctor_live() {
 	*) ok "lead's $live_review" ;;
 	esac
 	live_default=$(json_value defaultAgent)
+	live_slots=$(json_value max_helper_slots)
+	live_slots_line=$(json_value helperSlotsLine)
+	case $live_slots_line in
+	'' | null) note "lead's prompt has no single helper limit instruction; max_helper_slots ${live_slots:-unknown} may not apply" ;;
+	*) ok "max_helper_slots $live_slots; lead's instruction: $live_slots_line" ;;
+	esac
 	if [ "$live_default" = lead ]; then
 		ok "lead is the default agent"
 	else

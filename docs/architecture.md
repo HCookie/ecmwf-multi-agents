@@ -122,8 +122,9 @@ A check that already failed before the change is not a failed task: `lead` tells
 instead of retrying. Scouts cannot run code; when an answer needs code run, `lead` runs it or
 briefs a builder to run it without changing anything.
 
-Parallelism: at most three helpers at once. Scouts in parallel whenever their questions are
-independent. Builders in parallel only when their file sets do not overlap.
+Parallelism: at most `max_helper_slots` helpers at once (default 4). Scouts in parallel
+whenever their questions are independent. Builders in parallel only when their file sets do
+not overlap. This is an instruction to `lead`, not a runtime scheduler or a machine-wide cap.
 
 ## Background helpers
 
@@ -283,7 +284,7 @@ held report wakes `lead` once.
 `/execute` carries out an approved plan:
 
 1. Read the plan file; the open tasks whose dependencies are done are ready. Take as many
-   of them as there are free helper slots, at most three helpers at once, and never two
+   of them as there are free helper slots, up to the limit in `lead`'s instructions, and never two
    whose file sets overlap (the rule under Routing): a ready task that shares a file with a
    running or taken task waits for it. The plan's `Parallel` line names the sets that may
    run together.
@@ -346,10 +347,10 @@ by exact path.
 
 ## Onboarding summary
 
-`/onboard` sends three scouts in parallel (docs and intent; layout and the build, test and
-lint commands; conventions and current direction). With a focus argument, one more scout
-studies that area in depth after the others have finished, to keep within three helpers at
-once. `lead` writes `context/onboard.md`:
+`/onboard` briefs three scouts (docs and intent; layout and the build, test and lint commands;
+conventions and current direction), running them in parallel up to the helper limit in
+`lead`'s instructions. With a focus argument, one more scout studies that area in depth after
+the others have finished. `lead` writes `context/onboard.md`:
 
 1. Purpose
 2. Architecture
@@ -382,6 +383,7 @@ Changes take effect when opencode restarts.
   "review": "auto",           // auto | ask | always | never
   "profile": "default",       // a profile name from src/profiles/
   "default_agent": true,      // make lead the default agent
+  "max_helper_slots": 4,      // concurrent helpers, integer at least 1
   "agents": {                 // per-agent overrides, applied after the profile
     "builder": { "effort": "xhigh" },
     "reviewer": { "model": "openai/gpt-6.1-sol", "effort": "high", "steps": 40 }
@@ -393,6 +395,13 @@ An `agents` entry may set `model` (`provider/model`), `effort` and `steps`. An o
 `model` replaces the profile's model and effort together, so the agent runs at the effort the
 entry names, or at the model's own default when it names none. An override `effort` alone
 applies to the profile's model. `steps` replaces the agent's step limit.
+
+`max_helper_slots` is an integer of at least 1, default 4. The plugin rewrites the one
+`Run at most N helpers at once.` instruction in `lead`, preserving the file-ownership rules
+that follow it. The generated prompt uses 4 without the plugin. The plan skill and `/onboard`
+refer to that instruction rather than repeating the number. A missing or duplicate instruction
+is reported; an explicitly chosen limit that cannot apply also shows a warning toast.
+More slots can run more builders, databases, dev servers and builds on the same machine.
 
 The generator writes a JSON Schema for this file; the plugin validates with the same patterns.
 A file with unknown keys or invalid values is ignored as a whole and reported on standard
@@ -481,8 +490,8 @@ the harness also installed as files, the registration is harmless: same content,
 win. Two things win over files and config, with or without registration: `/review` and
 `/progress`, which the plugin registers again after the command files, and the settings, which
 the late agent transform applies over every agent with a harness name (model, effort, step
-limit, and `lead`'s review line). A test compares the agents, commands and skills the plugin
-registers with those opencode loads from the generated files.
+limit, and `lead`'s review line and helper limit). A test compares the agents, commands and
+skills the plugin registers with those opencode loads from the generated files.
 
 Each agent's own permission rules win over the user's config either way. opencode's loader adds
 a config's top-level `permissions` to every agent that exists when it runs, and an agent file's
@@ -511,14 +520,14 @@ The server entry registers an RPC with the id `ecmwf-multi-agents`, reachable at
 
 | Method or event | Answer |
 |---|---|
-| `doctor` | The harness version, the default agent, whether `lead` is loaded and whether it is the harness's own (`leadDefinition`, with the fields that differ in `leadChanged`), the `lead.md` files and opencode configs with a `lead` entry that could change it, `lead`'s `Review policy:` line and model, the effective settings and the file each comes from, the problems found, and the state of the plugins other than opencode's own |
+| `doctor` | The harness version, the default agent, whether `lead` is loaded and whether it is the harness's own (`leadDefinition`, with the fields that differ in `leadChanged`), the `lead.md` files and opencode configs with a `lead` entry that could change it, `lead`'s `Review policy:` line, helper limit instruction and model, the effective settings and the file each comes from, the problems found, and the state of the plugins other than opencode's own |
 | `problems` | The problems found since the plugin loaded, each with `notify` when it deserves a toast |
 | event `problem` | Published for each new problem |
 
 opencode does not record where an agent came from, so `doctor` compares the `lead` opencode
-loaded with the harness's own, field by field: the prompt with the review line the settings
-write, the description, mode, `hidden`, color, and the harness's permission rules, which must
-all be there in order (rules before or after them come from the user's config and are
+loaded with the harness's own, field by field: the prompt with the review line and helper limit
+the settings write, the description, mode, `hidden`, color, and the harness's permission rules,
+which must all be there in order (rules before or after them come from the user's config and are
 expected). The model, effort and step limit are compared with what the settings choose. The
 `lead.md` files where opencode reads agent files (`leadCandidateFiles`) and the configs with an
 `agents.lead` or `agent.lead` entry (`leadConfigFiles`: the global folder, `OPENCODE_CONFIG`,

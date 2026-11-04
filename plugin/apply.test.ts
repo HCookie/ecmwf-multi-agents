@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, test } from "bun:test";
-import { applyToV2Agents, planAgents, rewriteReviewLine } from "./apply.ts";
+import { applyToV2Agents, helperSlotsLine, planAgents, rewriteHelperSlotsLine, rewriteReviewLine } from "./apply.ts";
 import { mergeSettings } from "./settings.ts";
 import { LEAD_PROMPT, embeddedFixture, resolvedFixture } from "./testing.ts";
 import type { Settings, SettingsFile, V2AgentEditor, V2AgentInfo } from "./types.ts";
@@ -120,6 +120,26 @@ describe("rewriteReviewLine", () => {
   });
 });
 
+describe("rewriteHelperSlotsLine", () => {
+  test("overrides old and current limits, preserving surrounding instructions and line endings", () => {
+    for (const limit of ["three helpers", "4 helpers", "1 helper"]) {
+      const prompt = `Before\r\nRun at most ${limit} at once. Keep builders on disjoint files.\r\nAfter`;
+      const changed = rewriteHelperSlotsLine(prompt, 8, "lead").prompt!;
+      expect(changed).toBe("Before\r\nRun at most 8 helpers at once. Keep builders on disjoint files.\r\nAfter");
+      expect(rewriteHelperSlotsLine(changed, 8, "lead").prompt).toBe(changed);
+      expect(helperSlotsLine(changed)).toBe("Run at most 8 helpers at once.");
+      expect(rewriteHelperSlotsLine(changed, 1, "lead").prompt).toContain("Run at most 1 helper at once.");
+    }
+  });
+
+  test("missing and duplicate instructions cannot be rewritten or reported as effective", () => {
+    for (const prompt of ["Custom lead.", "Run at most 4 helpers at once.\nRun at most 2 helpers at once."]) {
+      expect(rewriteHelperSlotsLine(prompt, 6, "lead").problem).toContain("max_helper_slots was not applied");
+      expect(helperSlotsLine(prompt)).toBeNull();
+    }
+  });
+});
+
 describe("applyToV2Agents", () => {
   test("default settings keep the baked values", () => {
     const editor = v2Editor();
@@ -130,12 +150,13 @@ describe("applyToV2Agents", () => {
 
   test("a profile and overrides set model {id, providerID, variant}, steps and system", () => {
     const editor = v2Editor();
-    const settings = settingsOf({ profile: "anthropic", review: "always", agents: { scout: { steps: 9 }, builder: { model: "openrouter/anthropic/claude-x" } } });
+    const settings = settingsOf({ profile: "anthropic", review: "always", max_helper_slots: 8, agents: { scout: { steps: 9 }, builder: { model: "openrouter/anthropic/claude-x" } } });
     applyToV2Agents(editor, harness, settings, planAgents(harness, settings).plans);
     expect(editor.get("reviewer")).toMatchObject({ model: { id: "claude-opus-5-5", providerID: "anthropic", variant: "high" }, steps: 30 });
     expect(editor.get("scout")).toMatchObject({ model: { id: "claude-sonnet-5-5", providerID: "anthropic", variant: "medium" }, steps: 9 });
     expect(editor.get("builder")!.model).toEqual({ id: "anthropic/claude-x", providerID: "openrouter" });
     expect(editor.get("lead")!.system).toContain("\nReview policy: always\n");
+    expect(editor.get("lead")!.system).toContain("Run at most 8 helpers at once. Run builders only on disjoint files.");
     expect(editor.get("build")!.model).toEqual({ id: "m", providerID: "p" });
   });
 
@@ -164,8 +185,17 @@ describe("applyToV2Agents", () => {
     const editor = v2Editor();
     editor.get("lead")!.system = "Custom.";
     const problems = applyToV2Agents(editor, harness, settingsOf({ review: "ask" }), []);
-    expect(problems).toHaveLength(1);
+    expect(problems).toHaveLength(2);
     expect(problems[0]!.notify).toBe(true);
+    expect(problems[1]!.notify).toBe(false);
     expect(editor.get("lead")!.system).toBe("Custom.");
+  });
+
+  test("an explicit helper limit that cannot apply is reported without undoing the review policy", () => {
+    const editor = v2Editor();
+    editor.get("lead")!.system = "Custom.\nReview policy: auto";
+    const problems = applyToV2Agents(editor, harness, settingsOf({ review: "never", max_helper_slots: 2 }), []);
+    expect(problems).toEqual([{ message: 'ecmwf-multi-agents: the prompt of lead has no "Run at most ... helpers at once." instruction; max_helper_slots was not applied', notify: true }]);
+    expect(editor.get("lead")!.system).toBe("Custom.\nReview policy: never");
   });
 });

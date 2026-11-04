@@ -40,7 +40,7 @@ const ISOLATION = {
 };
 
 const VALID =
-  '// test settings\n{ "profile": "anthropic", "review": "always", "agents": { "scout": { "steps": 9 }, "builder": { "effort": "xhigh" } }, }\n';
+  '// test settings\n{ "profile": "anthropic", "review": "always", "max_helper_slots": 8, "agents": { "scout": { "steps": 9 }, "builder": { "effort": "xhigh" } }, }\n';
 const INVALID = '{ "profile": "anthropic", "review": "sometimes" }\n';
 
 interface Sandbox {
@@ -217,7 +217,8 @@ describe.skipIf(!enabled)(`plugin in opencode ${V2_VERSION}`, () => {
     find(list, "reviewer")?.model?.providerID === "anthropic" &&
     find(list, "scout")?.steps === 9 &&
     find(list, "builder")?.model?.variant === "xhigh" &&
-    reviewLine(find(list, "lead")) === "Review policy: always";
+    reviewLine(find(list, "lead")) === "Review policy: always" &&
+    find(list, "lead")?.system?.includes("Run at most 8 helpers at once.") === true;
   /** Lets the plugin's transform settle after the agents first appear (its fallback is 3 s). */
   const settle = () => Bun.sleep(4_000);
 
@@ -293,6 +294,17 @@ describe.skipIf(!enabled)(`plugin in opencode ${V2_VERSION}`, () => {
     await stop();
   }, 180_000);
 
+  test("a project helper limit overrides the global limit; an invalid one keeps the global settings", async () => {
+    for (const [value, expected] of [[1, "1 helper"], [0, "8 helpers"]] as const) {
+      writeSettings(box, VALID, JSON.stringify({ max_helper_slots: value }));
+      await start();
+      const list = await until("the helper limit to apply", (items) => find(items, "lead")?.system?.includes(`Run at most ${expected} at once.`) === true);
+      expect(reviewLine(find(list, "lead"))).toBe("Review policy: always");
+      if (value === 0) expect(server!.stderr()).toContain('"max_helper_slots" must be a whole number of at least 1');
+      await stop();
+    }
+  }, 180_000);
+
   test("an invalid settings file leaves the defaults", async () => {
     writeSettings(box, INVALID);
     await start();
@@ -302,6 +314,7 @@ describe.skipIf(!enabled)(`plugin in opencode ${V2_VERSION}`, () => {
     expect(find(list, "reviewer")!.model).toEqual({ id: "gpt-6.1-sol", providerID: "github-copilot", variant: "medium" });
     expect(find(list, "scout")!.steps).toBe(30);
     expect(reviewLine(find(list, "lead"))).toBe("Review policy: auto");
+    expect(find(list, "lead")!.system).toContain("Run at most 4 helpers at once.");
     expect(server!.stderr()).toContain(`ecmwf-multi-agents: ignoring ${path.join(box.config, SETTINGS)}: "review" must be`);
     await stop();
   }, 180_000);
@@ -319,6 +332,7 @@ describe.skipIf(!enabled)(`plugin in opencode ${V2_VERSION}`, () => {
       expect(find(list, "builder")!.model).toEqual({ id: "claude-sonnet-5-5", providerID: "anthropic", variant: "high" });
       expect(find(list, "scout")!.steps).toBe(30);
       expect(reviewLine(find(list, "lead"))).toBe("Review policy: auto");
+      expect(find(list, "lead")!.system).toContain("Run at most 4 helpers at once.");
     } finally {
       await stop();
       setPlugin(box, true);

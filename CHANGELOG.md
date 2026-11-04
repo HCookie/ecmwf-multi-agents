@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+### Added
+
+- `max_helper_slots` in user and project settings controls how many helpers `lead` may run
+  at once, including during `/execute` and `/onboard`. It accepts integers of at least 1,
+  defaults to 4 instead of the previous fixed limit of three, and is shown by `doctor` (#6).
+
 ## [0.6.0] - 2026-10-15
 
 This release supports opencode 2 only.

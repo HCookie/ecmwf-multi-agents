@@ -709,8 +709,12 @@ above works on the stand-in; the real-model evals pass on opencode 2.
 
 ## Follow-ups
 
-- [~] Tiago: Issue #6, configurable `max_helper_slots` (integer at least 1, default 4):
+- [x] Tiago: Issue #6, configurable `max_helper_slots` (integer at least 1, default 4):
   settings and schema, lead instructions and plan skill, doctor output, guide and tests.
+  Includes `/onboard` respecting a limit below three. The plan skill
+  and `/onboard` use the limit in lead's instructions rather than another fixed number.
+  Verified: `make check` 617 pass, all 61 integration tests pass on opencode 2.0.29,
+  `make pack-check` 38 files; `dist/` regenerated.
 
 ## Open questions
 

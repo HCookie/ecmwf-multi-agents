@@ -44,8 +44,9 @@ const GOOD_DOCTOR = {
     leadCandidateFiles: [],
     leadConfigFiles: [],
     reviewLine: "Review policy: auto",
+    helperSlotsLine: "Run at most 4 helpers at once.",
     leadModel: "anthropic/claude-opus-5-5#xhigh",
-    settings: { review: "auto", profile: "default", default_agent: true, agents: {} },
+    settings: { review: "auto", profile: "default", default_agent: true, max_helper_slots: 4, agents: {} },
     settingsFiles: [],
     settingsSources: {},
     problems: [],
@@ -585,6 +586,7 @@ describe("doctor", () => {
     expect(out).toContain("WARN  profile default: not available: github-copilot/gpt-6.1-sol");
     expect(out).toContain("OK    lead is the harness's, with the plugin 9.9.9 active");
     expect(out).toContain("OK    lead's Review policy: auto");
+    expect(out).toContain("OK    max_helper_slots 4; lead's instruction: Run at most 4 helpers at once.");
     expect(out).toContain("OK    lead is the default agent");
   });
 
@@ -739,11 +741,12 @@ describe("doctor asks opencode through the plugin's RPC", () => {
     expect(run(box, ["doctor"]).out).toContain(
       "WARN  lead was changed: model; no lead.md file or opencode config with a lead entry was found, so another plugin may have changed it",
     );
-    answer(box, { output: { ...GOOD_DOCTOR.output, leadLoaded: false, leadDefinition: null, reviewLine: null } });
+    answer(box, { output: { ...GOOD_DOCTOR.output, leadLoaded: false, leadDefinition: null, reviewLine: null, helperSlotsLine: null } });
     const missing = run(box, ["doctor"]);
     expect(missing.code).toBe(1);
     expect(missing.out).toContain("FAIL  opencode has no lead in");
     expect(missing.out).toContain("WARN  lead's prompt has no \"Review policy:\" line");
+    expect(missing.out).toContain("WARN  lead's prompt has no single helper limit instruction; max_helper_slots 4 may not apply");
   });
 
   test("a global install masks a project's plugins line: a warning", () => {

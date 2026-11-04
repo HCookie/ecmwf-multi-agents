@@ -83,6 +83,7 @@ export interface SettingsFile {
   review?: ReviewPolicy;
   profile?: string;
   default_agent?: boolean;
+  max_helper_slots?: number;
   agents?: Record<string, AgentOverride>;
 }
 
@@ -93,6 +94,9 @@ export interface Settings {
   reviewSet: boolean;
   profile: string;
   defaultAgent: boolean;
+  maxHelperSlots: number;
+  /** True when a settings file chose the helper limit. */
+  maxHelperSlotsSet: boolean;
   agents: Record<string, AgentOverride>;
 }
 

@@ -300,6 +300,7 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
     projects.both = gitProject(path.join(box, "both"), { plugins: [line] });
     writeAll(path.join(projects.both, ".opencode"), generated.map((file) => (file.path === "agents/scout.md" ? { ...file, content: file.content.replace(/^steps: \d+$/m, "steps: 7") } : file)));
     projects.changed = gitProject(path.join(box, "changed"), { plugins: [line], agents: { lead: { description: "The project's own lead." } } });
+    writeAll(path.join(projects.changed, ".opencode"), [{ path: `${NAME}.jsonc`, content: '{ "max_helper_slots": 6 }\n' }]);
     projects.none = gitProject(path.join(box, "none"));
     projects.run = gitProject(path.join(box, "run"), { plugins: [line], model: "mock/m1", provider: { mock: provider } });
     // Every agent on the stand-in's session model.
@@ -463,6 +464,8 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
       leadCandidateFiles: [],
       leadConfigFiles: [],
       reviewLine: "Review policy: auto",
+      helperSlotsLine: "Run at most 4 helpers at once.",
+      settings: { max_helper_slots: 4 },
       problems: [],
     });
     const problems = await call<{ output?: unknown }>("POST", `/api/rpc/${NAME}/problems`, projects.line, { input: {} });
@@ -490,6 +493,9 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
       leadChanged: ["description"],
       leadCandidateFiles: [],
       leadConfigFiles: [path.join(projects.changed, "opencode.json")],
+      helperSlotsLine: "Run at most 6 helpers at once.",
+      settings: { max_helper_slots: 6 },
+      settingsSources: { max_helper_slots: path.join(projects.changed, ".opencode", `${NAME}.jsonc`) },
     });
   }, 120_000);
 

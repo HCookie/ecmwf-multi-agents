@@ -78,7 +78,7 @@ const readOnlyShell = shell(
   "tree *",
 );
 
-export const LEAD_PROMPT = "You are lead, the coordinating agent.\n\n## Review\n\nReview policy: auto\n\nThe line above sets when the reviewer checks work.";
+export const LEAD_PROMPT = "You are lead, the coordinating agent.\n\n## Review\n\nReview policy: auto\n\nThe line above sets when the reviewer checks work.\n\nRun at most 4 helpers at once. Run builders only on disjoint files.";
 
 const agents: ResolvedAgent[] = [
   {

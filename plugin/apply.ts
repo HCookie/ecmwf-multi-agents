@@ -55,6 +55,27 @@ export function planAgents(harness: EmbeddedHarness, settings: Settings): { plan
 }
 
 const REVIEW_LINE = /^Review policy:[^\r\n]*/gm;
+// Also recognizes the word "three" in an older installed or user-supplied lead prompt.
+const HELPER_SLOTS_LINE = /^Run at most \S+ helpers? at once\./gm;
+
+/** The one concurrency instruction in the loaded prompt, or null when it is missing or ambiguous. */
+export function helperSlotsLine(prompt: string): string | null {
+  const matches = prompt.match(HELPER_SLOTS_LINE) ?? [];
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+/** Replace just the helper limit, preserving the file-ownership and parallel-start rules after it. */
+export function rewriteHelperSlotsLine(
+  prompt: string,
+  slots: number,
+  agent: string,
+): { prompt: string; problem?: undefined } | { prompt?: undefined; problem: string } {
+  const count = prompt.match(HELPER_SLOTS_LINE)?.length ?? 0;
+  if (count !== 1) {
+    return { problem: `the prompt of ${agent} has ${count === 0 ? "no" : count} "Run at most ... helpers at once." instruction${count > 1 ? "s" : ""}; max_helper_slots was not applied` };
+  }
+  return { prompt: prompt.replace(HELPER_SLOTS_LINE, `Run at most ${slots} ${slots === 1 ? "helper" : "helpers"} at once.`) };
+}
 
 /** Replace the one `Review policy: <value>` line; report instead when there is not exactly one. */
 export function rewriteReviewLine(
@@ -82,9 +103,9 @@ export function modelRef(model: string, effort: string | undefined): V2ModelRef 
 }
 
 /**
- * Apply plans and the review policy through an opencode 2.0.16 agent editor. The effort goes to
- * `model.variant`. Only agents that already exist are touched: `update` would create a missing
- * one. Returns problems to report.
+ * Apply plans, the review policy and the helper limit through an opencode 2 agent editor.
+ * The effort goes to `model.variant`. Only agents that already exist are touched: `update`
+ * would create a missing one. Returns problems to report.
  */
 export function applyToV2Agents(editor: V2AgentEditor, harness: EmbeddedHarness, settings: Settings, plans: readonly AgentPlan[]): Problem[] {
   const problems: Problem[] = [];
@@ -107,9 +128,13 @@ export function applyToV2Agents(editor: V2AgentEditor, harness: EmbeddedHarness,
     if (typeof lead.system === "string") {
       const result = rewriteReviewLine(lead.system, settings.review, harness.defaultAgent);
       if (result.problem !== undefined) problems.push(reviewProblem(harness, settings, result.problem));
-      else changes.push(() => editor.update(harness.defaultAgent, (agent) => (agent.system = result.prompt)));
+      const slots = rewriteHelperSlotsLine(result.prompt ?? lead.system, settings.maxHelperSlots, harness.defaultAgent);
+      if (slots.problem !== undefined) problems.push({ message: `${harness.name}: ${slots.problem}`, notify: settings.maxHelperSlotsSet });
+      const prompt = slots.prompt ?? result.prompt;
+      if (prompt !== undefined) changes.push(() => editor.update(harness.defaultAgent, (agent) => (agent.system = prompt)));
     } else {
       problems.push(reviewProblem(harness, settings, `${harness.defaultAgent} has no prompt, so the review policy was not applied`));
+      problems.push({ message: `${harness.name}: ${harness.defaultAgent} has no prompt, so max_helper_slots was not applied`, notify: settings.maxHelperSlotsSet });
     }
   }
 

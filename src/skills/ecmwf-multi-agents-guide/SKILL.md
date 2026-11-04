@@ -24,7 +24,7 @@ You talk to one agent, `lead`. It works out what you need, asks when something i
 - `/review [target]`: independent review, under any policy, of your uncommitted changes (no target), a branch, a pull request (number or URL) or a plan file. It replaces opencode's own `/review`.
 - `/guide [question]`: this guide.
 
-A project's own command or agent with the same name, such as its own `/onboard`, takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide a harness agent's model, effort and steps, and the review policy.
+A project's own command or agent with the same name, such as its own `/onboard`, takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide a harness agent's model, effort and steps, the review policy and helper limit.
 
 ## Review policy
 
@@ -44,6 +44,7 @@ Settings live in `~/.config/opencode/ecmwf-multi-agents.jsonc`. A project can ov
   "review": "auto", // auto, ask, always or never
   "profile": "default", // default, anthropic, copilot or inherit
   "default_agent": true, // start opencode on lead
+  "max_helper_slots": 4, // helpers at once, integer at least 1
   "agents": { // per-agent overrides, after the profile
     "builder": { "effort": "xhigh" },
     "reviewer": { "model": "provider/model-name", "steps": 40 }
@@ -52,6 +53,8 @@ Settings live in `~/.config/opencode/ecmwf-multi-agents.jsonc`. A project can ov
 ```
 
 Each agent takes `model`, `effort` and `steps`. Effort is how hard a model thinks: more effort is slower and costs more. Values: `low`, `medium`, `high`, `xhigh`, `max`; some models also `none`. Defaults: `lead` xhigh, `builder` high, `scout` and reviewer medium. Effort needs a model, so under `inherit` set `model` too. `steps` caps an agent's turns, which limits cost.
+
+`max_helper_slots` tells `lead` how many helpers may run at once (default 4). More slots can run more builders, databases, dev servers and builds on the same machine; raise it with care. `/execute` and `/onboard` follow this limit.
 
 Profiles give each agent a model and an effort:
 

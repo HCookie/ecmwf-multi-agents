@@ -39,7 +39,7 @@ function loadedLead(files: Record<string, string>, change: (agent: V2AgentInfo) 
   return agent;
 }
 
-const ALWAYS = { [`${GLOBAL}/ecmwf-multi-agents.jsonc`]: '{ "review": "always", "profile": "copilot", "agents": { "scout": { "steps": 9 }, "lead": { "steps": 40 } } }' };
+const ALWAYS = { [`${GLOBAL}/ecmwf-multi-agents.jsonc`]: '{ "review": "always", "profile": "copilot", "max_helper_slots": 8, "agents": { "scout": { "steps": 9 }, "lead": { "steps": 40 } } }' };
 
 describe("doctor", () => {
   test("reports the harness's lead, its review line, the settings with their files, problems and plugins", async () => {
@@ -63,10 +63,11 @@ describe("doctor", () => {
       leadCandidateFiles: [],
       leadConfigFiles: [],
       reviewLine: "Review policy: always",
+      helperSlotsLine: "Run at most 8 helpers at once.",
       leadModel: "github-copilot/claude-opus-5.5#xhigh",
-      settings: { review: "always", profile: "copilot", default_agent: true, agents: { scout: { steps: 9 }, lead: { steps: 40 } } },
+      settings: { review: "always", profile: "copilot", default_agent: true, max_helper_slots: 8, agents: { scout: { steps: 9 }, lead: { steps: 40 } } },
       settingsFiles: [file],
-      settingsSources: { review: file, profile: file, "agents.scout.steps": file, "agents.lead.steps": file },
+      settingsSources: { review: file, profile: file, max_helper_slots: file, "agents.scout.steps": file, "agents.lead.steps": file },
       problems: [{ problem: "x: something", notify: true }],
       plugins: [
         { id: "opencode.broken", status: "failed", error: "boom" },
@@ -138,7 +139,15 @@ describe("doctor", () => {
   });
 
   test("lead missing", async () => {
-    expect(await doctorReport(input({}, [{ id: "build" }]))).toMatchObject({ defaultAgent: "build", leadLoaded: false, leadDefinition: null, leadChanged: [] });
+    expect(await doctorReport(input({}, [{ id: "build" }]))).toMatchObject({ defaultAgent: "build", leadLoaded: false, leadDefinition: null, leadChanged: [], helperSlotsLine: null });
+  });
+
+  test("the helper instruction and its configured value are reported separately for a custom lead", async () => {
+    const lead = loadedLead(ALWAYS);
+    lead.system = "Review policy: always\nCustom instructions.";
+    expect(await doctorReport(input(ALWAYS, [lead]))).toMatchObject({
+      leadDefinition: "changed", helperSlotsLine: null, settings: { max_helper_slots: 8 },
+    });
   });
 
   test("agent files are looked for in the global folder opencode uses and in .opencode up to the project root", () => {

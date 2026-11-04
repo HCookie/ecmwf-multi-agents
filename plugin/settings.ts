@@ -19,13 +19,14 @@ import {
 } from "./types.ts";
 
 export const SETTINGS_FILE = "ecmwf-multi-agents.jsonc";
+export const DEFAULT_MAX_HELPER_SLOTS = 4;
 
 /** `provider/model`, split at the first "/", with no "#" (opencode 2 reads "#" as a variant) and no spaces. */
 export const MODEL_PATTERN = /^[^/#\s]+\/[^#\s]+$/;
 /** A non-empty effort name, such as "high", without "#" or spaces. opencode calls it the model variant. */
 export const EFFORT_PATTERN = /^[^#\s]+$/;
 
-const TOP_KEYS = ["$schema", "review", "profile", "default_agent", "agents"];
+const TOP_KEYS = ["$schema", "review", "profile", "default_agent", "max_helper_slots", "agents"];
 const AGENT_KEYS = ["model", "effort", "steps"];
 /** Agent keys that were renamed, to the name they have now. */
 const RENAMED_AGENT_KEYS: Readonly<Record<string, string>> = { variant: "effort" };
@@ -121,6 +122,10 @@ export function validateSettings(value: unknown, harness: EmbeddedHarness): { se
         settings.agents = agents;
         break;
       }
+      case "max_helper_slots":
+        if (typeof item === "number" && Number.isInteger(item) && item >= 1) settings.max_helper_slots = item;
+        else problems.push(`"max_helper_slots" must be a whole number of at least 1, not ${shown(item)}`);
+        break;
       default:
         problems.push(`unknown setting ${shown(key)}; the settings are ${listWords(TOP_KEYS, "and")}`);
     }
@@ -166,6 +171,8 @@ export function mergeSettings(files: readonly SettingsFile[], harness: EmbeddedH
     reviewSet: false,
     profile: harness.defaultProfile,
     defaultAgent: true,
+    maxHelperSlots: DEFAULT_MAX_HELPER_SLOTS,
+    maxHelperSlotsSet: false,
     agents: {},
   };
   for (const file of files) {
@@ -175,6 +182,10 @@ export function mergeSettings(files: readonly SettingsFile[], harness: EmbeddedH
     }
     if (file.profile !== undefined) settings.profile = file.profile;
     if (file.default_agent !== undefined) settings.defaultAgent = file.default_agent;
+    if (file.max_helper_slots !== undefined) {
+      settings.maxHelperSlots = file.max_helper_slots;
+      settings.maxHelperSlotsSet = true;
+    }
     for (const [id, override] of Object.entries(file.agents ?? {})) {
       settings.agents[id] = { ...settings.agents[id], ...override };
     }
@@ -199,6 +210,7 @@ export function settingSources(files: readonly SettingsFile[], applied: readonly
     if (file.review !== undefined) sources.review = from;
     if (file.profile !== undefined) sources.profile = from;
     if (file.default_agent !== undefined) sources.default_agent = from;
+    if (file.max_helper_slots !== undefined) sources.max_helper_slots = from;
     for (const [id, override] of Object.entries(file.agents ?? {})) {
       for (const key of Object.keys(override)) sources[`agents.${id}.${key}`] = from;
     }
