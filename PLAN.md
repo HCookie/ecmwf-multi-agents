@@ -715,6 +715,8 @@ above works on the stand-in; the real-model evals pass on opencode 2.
   and `/onboard` use the limit in lead's instructions rather than another fixed number.
   Verified: `make check` 617 pass, all 61 integration tests pass on opencode 2.0.29,
   `make pack-check` 38 files; `dist/` regenerated.
+- [~] Tiago: Release 0.7.0 after CI passes for configurable helper slots; verify the tag's
+  publishing workflow and the npm version.
 
 ## Open questions
 
