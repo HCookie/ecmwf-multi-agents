@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04
+
 ### Added
 
 - `max_helper_slots` in user and project settings controls how many helpers `lead` may run
@@ -208,7 +210,8 @@ helpers it hands work to.
 - Scenario evals (`make evals`) that compare the harness with plain opencode on a sample
   repository, using real models.
 
-[Unreleased]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.6.0...HEAD
+[Unreleased]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.5.3...0.6.0
 [0.5.3]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.5.2...0.5.3
 [0.5.2]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.5.1...0.5.2
