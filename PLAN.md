@@ -707,6 +707,11 @@ merges.
 Exit: `make check` and the integration suites pass on 2.0.29 with no 1.x code left; every row
 above works on the stand-in; the real-model evals pass on opencode 2.
 
+## Follow-ups
+
+- [~] Tiago: Issue #6, configurable `max_helper_slots` (integer at least 1, default 4):
+  settings and schema, lead instructions and plan skill, doctor output, guide and tests.
+
 ## Open questions
 
 - Prompt budgets are ceilings raised only to a measured change (see Phase 7, Budgets). The
