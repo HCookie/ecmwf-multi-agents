@@ -723,7 +723,12 @@ above works on the stand-in; the real-model evals pass on opencode 2.
   (2.2.x changed the TUI plugin API to OpenTUI 0.8), move the pin. Only three test
   expectations changed: opencode 2.2.x also appends `skill browser deny` to every agent. The
   TUI entry uses no OpenTUI. `docs/research/opencode-v2.md`, Addendum: 2.2.5
-- [~] Samet: Release 0.7.1 with the 2.2.5 pin
+- [x] Samet: Release 0.7.1 with the 2.2.5 pin. `make release 0.7.1` on 2026-11-05; the tag's
+  workflow published `@ecmwf.int/multi-agents@0.7.1` through the trusted publisher, with
+  provenance. Checked from the registry in a sandbox on opencode 2.2.5: `npm audit
+  signatures` verifies the signature and the attestation; `npm install -g` then
+  `ecmwf-multi-agents` installs 20 files with no version warning and records 0.7.1, and
+  `doctor` finds no problems (`lead` is the harness's, the plugin 0.7.1 active)
 
 ## Open questions
 
