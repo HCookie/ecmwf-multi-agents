@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-05
+
 ### Changed
 
 - Tested with opencode 2.2.5 (was 2.0.29).
@@ -214,7 +216,8 @@ helpers it hands work to.
 - Scenario evals (`make evals`) that compare the harness with plain opencode on a sample
   repository, using real models.
 
-[Unreleased]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.7.0...HEAD
+[Unreleased]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.7.1...HEAD
+[0.7.1]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.5.3...0.6.0
 [0.5.3]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.5.2...0.5.3
