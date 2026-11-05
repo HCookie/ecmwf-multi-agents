@@ -719,8 +719,10 @@ above works on the stand-in; the real-model evals pass on opencode 2.
   publishing workflow and the npm version.
   GitHub release and tag published; release CI and the npm publishing workflow passed.
   npm confirms version 0.7.0 and the `latest` tag, with provenance attached.
-- [~] Samet: Pin opencode 2.2.5 (from 2.0.29): run every suite on it, fix what it breaks
-  (2.2.x changed the TUI plugin API to OpenTUI 0.8), move the pin
+- [x] Samet: Pin opencode 2.2.5 (from 2.0.29): run every suite on it, fix what it breaks
+  (2.2.x changed the TUI plugin API to OpenTUI 0.8), move the pin. Only three test
+  expectations changed: opencode 2.2.x also appends `skill browser deny` to every agent. The
+  TUI entry uses no OpenTUI. `docs/research/opencode-v2.md`, Addendum: 2.2.5
 
 ## Open questions
 

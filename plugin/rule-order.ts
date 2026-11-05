@@ -14,14 +14,14 @@
 //
 // To put the rules back in the file order, the registration transform also adds a hidden probe
 // agent with no rules. Every rule added after it to all agents reaches the probe too: the
-// config's, and those opencode adds after the config (2.0.29 denies `browser` to every agent,
-// plugin-browser/src/connection.ts). The late transform (v2.ts), which runs after all of them,
-// reads these rules from the probe, removes the probe and moves each agent's own rules past
-// them. Rules given to one agent alone, such as the user's `agents.scout.permissions`, stop the
-// move and stay after the agent's own, as with files. Without such rules the agent's own rules
-// also end up after opencode's own later ones, where with files they come before; the harness
-// has no rule for what those cover. The probe is only added once the late transform is
-// registered, so it never reaches the agents opencode lists.
+// config's, and those opencode adds after the config (2.2.5 denies the browser tools and the
+// browser skill to every agent, plugin-browser/src/connection.ts). The late transform (v2.ts),
+// which runs after all of them, reads these rules from the probe, removes the probe and moves
+// each agent's own rules past them. Rules given to one agent alone, such as the user's
+// `agents.scout.permissions`, stop the move and stay after the agent's own, as with files.
+// Without such rules the agent's own rules also end up after opencode's own later ones, where
+// with files they come before; no rule of the harness matches what those deny. The probe is only
+// added once the late transform is registered, so it never reaches the agents opencode lists.
 
 import { expandPermissions } from "./register.ts";
 import type { EmbeddedHarness, PermissionRule, V2AgentEditor } from "./types.ts";

@@ -256,9 +256,13 @@ describe.skipIf(!enabled)(`emitV2 output in opencode ${V2_VERSION}`, () => {
 
   /**
    * What opencode appends after every agent's own rules: its browser plugin hides the browser
-   * tools until a desktop browser attaches (plugin-browser/src/connection.ts:25-28 at v2.0.28).
+   * tools and, since 2.2.x, its browser skill until a desktop browser attaches
+   * (plugin-browser/src/connection.ts:27-35 at v2.2.5).
    */
-  const TRAILING = [{ action: "browser", resource: "*", effect: "deny" }];
+  const TRAILING = [
+    { action: "browser", resource: "*", effect: "deny" },
+    { action: "skill", resource: "browser", effect: "deny" },
+  ];
   /** An agent's rules without what opencode appends after them. */
   const ownRules = (agents: ApiAgent[], id: string) => {
     const rules = agents.find((agent) => agent.id === id)!.permissions;

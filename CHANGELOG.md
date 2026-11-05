@@ -11,6 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+### Changed
+
+- Tested with opencode 2.2.5 (was 2.0.29).
+
 ## [0.7.0] - 2026-11-04
 
 ### Added

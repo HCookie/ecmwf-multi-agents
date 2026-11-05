@@ -930,3 +930,28 @@ cited as `v2.0.29:`, and the `@opencode/cli@2.0.29` binary.
   notes as no request from the user and the cut-off step before one as no end of a turn.
 - The emitter, plugin, background helper and installer integration suites pass on 2.0.29,
   with 1.18.35 and 1.19.0 beside it: 96 pass.
+
+## Addendum: 2.2.5
+
+The harness moved its opencode 2 pin from 2.0.29 to 2.2.5 after 0.7.0. Checked with the
+`@opencode/cli@2.2.5` binary and its source at tag `v2.2.5`, cited as `v2.2.5:` relative to
+`packages/`.
+
+- The emitter, plugin, background helper, register, central and installer integration suites
+  and the eval runner suite pass on 2.2.5. Only three test expectations changed, all about the
+  rules opencode appends to every agent.
+- opencode's browser plugin now denies its browser skill as well as the browser tools to every
+  agent: `skill browser deny` after `browser * deny` (`v2.2.5:
+  plugin-browser/src/connection.ts:27-35`). No rule of the harness matches either, so the
+  agents' decisions are the same wherever the plugin's rule ordering places them.
+- The TUI plugin API now needs OpenTUI 0.8 for plugins that render with it. The harness's TUI
+  entry renders nothing itself: it uses `ui.toast.show` and `client.rpc`, which are unchanged
+  (`v2.2.5: plugin/src/tui/context.ts:280-282`, `client/src/promise/client.ts:15`).
+- `OPENCODE_DISABLE_CLAUDE_CODE` is read again and turns off `.claude` folders (`v2.2.5:
+  cli/src/server-process.ts:127-131`). Project config is still collected from every folder up
+  to the file system root (`v2.2.5: core/src/config/discovery.ts:80-85`), so the eval runner
+  keeps refusing a sandbox below such a folder.
+- The continue notes that answer-first ignores are unchanged (`v2.2.5:
+  core/src/session/runner/llm.ts:37-41`), and the managed policy action `provider.use` that the
+  eval sandboxes use is unchanged (`v2.2.5: schema/src/config/policy.ts:18`).
+

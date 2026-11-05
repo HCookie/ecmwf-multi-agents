@@ -12,7 +12,9 @@
 # does not stop that search (core/src/config/discovery.ts at v2.0.29). This script cannot
 # switch it off for a project that needs its own config, so callers check the folders above
 # DIR themselves (the eval runner refuses to start when one holds such a file). The two
-# OPENCODE_DISABLE_* variables below were read by opencode 1.x; 2.0.29 ignores them.
+# OPENCODE_DISABLE_* variables below: 2.2.5 reads OPENCODE_DISABLE_CLAUDE_CODE again, to skip
+# .claude folders (cli/src/server-process.ts:127-131); OPENCODE_DISABLE_EXTERNAL_SKILLS is
+# from opencode 1.x and ignored.
 #
 # Usage: tools/sandbox.sh DIR command [args...]
 #   DIR is created if missing and reused if present, so several commands can share a sandbox.

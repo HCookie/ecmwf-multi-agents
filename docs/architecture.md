@@ -498,9 +498,9 @@ a config's top-level `permissions` to every agent that exists when it runs, and 
 own rules after them; a registered agent exists before the loader, so the config's rules would
 land after its own and win. The plugin restores the file order. Its registration transform also
 adds a hidden probe agent with no rules, which receives every rule later added to all agents: the
-config's, and those opencode adds after the config (opencode 2.0.29 denies `browser` to every
-agent). The settings transform, which runs after the loader, reads them from the probe, removes
-the probe, and moves each agent's own rules past them. Rules the user gives one agent
+config's, and those opencode adds after the config (opencode 2.2.5 denies the browser tools and
+the browser skill to every agent). The settings transform, which runs after the loader, reads
+them from the probe, removes the probe, and moves each agent's own rules past them. Rules the user gives one agent
 (`agents.scout.permissions` in a config) stay after its own, as with files, and a user's rule
 that the agent's own rules do not match still applies: a global deny of a command `builder`
 sets no rule for stays a deny. The one order that differs from files: opencode's own
@@ -606,7 +606,7 @@ src/commands/*.md         command templates
 src/skills/<id>/SKILL.md  skill bodies
 src/profiles/*.jsonc      model profiles
 tools/                    generator (TypeScript on Bun)
-dist/opencode-v2/         output for opencode 2 (tested on 2.0.29), and central/ for --central
+dist/opencode-v2/         output for opencode 2 (tested on 2.2.5), and central/ for --central
 plugin/                   runtime plugin sources
 ```
 

@@ -99,6 +99,18 @@ const GLOBAL_PERMISSIONS = [
   { action: "shell", resource: "touch user-denied*", effect: "deny" },
 ];
 
+/** Whether a `*` pattern matches a resource, as opencode's rules match. */
+function wildcard(pattern: string, value: string): boolean {
+  const escaped = pattern.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+  return new RegExp(`^${escaped}$`).test(value);
+}
+
+/** Whether two rules can decide the same request: the same action, and resources one matches. */
+function overlaps(a: PermissionRule, b: PermissionRule): boolean {
+  if (!(a.action === b.action || a.action === "*" || b.action === "*")) return false;
+  return wildcard(a.resource, b.resource) || wildcard(b.resource, a.resource);
+}
+
 /**
  * The permission rules an agent the plugin registered may have, given the same agent loaded from
  * a file: the agent's own rules always come after the user's global ones, and opencode's later
@@ -365,15 +377,16 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
       const want = pick(fromFiles.find((agent) => agent.id === id))!;
       expect(want.system).toBeString();
       // The agent's own rules come after the user's global ones, as from the file. Rules opencode
-      // adds to every agent after the config (a `browser` deny) may land before them or after:
-      // nothing in the agent's own rules matches them (acceptedRules).
+      // adds to every agent after the config (denies for the browser tools and skill) may land
+      // before them or after: no rule of the agent's own matches them, so either order decides
+      // the same (acceptedRules).
       const own = embedded.agents.find((agent) => agent.id === id)!.permissions!;
       const rules = want.permissions!;
       const start = rules.findIndex((_, index) => JSON.stringify(rules.slice(index, index + own.length)) === JSON.stringify(own));
       expect(JSON.stringify(rules.slice(start - GLOBAL_PERMISSIONS.length, start))).toBe(JSON.stringify(GLOBAL_PERMISSIONS));
       const later = rules.slice(start + own.length);
       expect(later.length).toBeLessThan(own.length);
-      for (const rule of later) expect(own.some((item) => item.action === (rule as PermissionRule).action)).toBe(false);
+      for (const rule of later) expect(own.filter((item) => overlaps(item, rule as PermissionRule))).toEqual([]);
       const got = pick(fromPlugin.find((agent) => agent.id === id))!;
       expect({ ...got, permissions: undefined }).toEqual({ ...want, permissions: undefined });
       expect(acceptedRules(rules, own)).toContain(JSON.stringify(got.permissions));
