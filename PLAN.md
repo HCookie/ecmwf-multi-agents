@@ -802,7 +802,8 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   background option and helper list, the question tool's recommended option) and one
   repeated sentence: 2049 to 1893 tokens. Budgets lowered to `lead` 1900 and `lead-all` 2250.
   Tests pin the tool descriptions the prompt now relies on, in the plugin's specs and in a
-  real `lead` request
+  real `lead` request. The background cases pass on real models, 5 of 5 for $1.04
+  (`evals/results/lead-condensed.md`)
 - [ ] Shorten `lead` further with code changes, measured at about 55, 70 and 150 tokens: the
   plugin writes only the active review policy's meaning; the plugin, not `lead`, adds the
   work folder to the git exclude file; the routing guidance moves into the helpers'
