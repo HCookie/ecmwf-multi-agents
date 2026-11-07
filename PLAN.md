@@ -754,8 +754,8 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
 - [x] Tiago: `doctor` and the installer report each helper on or off and the file that chose
   it, and helpers opencode did not follow
 - [x] Tiago: The four agents: prompts, permissions, profiles, routing lines; `lead` asks before
-  `gh issue create`. Prompts 746, 731, 704 and 746 tokens (helper budget 750); routing lines
-  62 to 80 (budget 100); `lead` with every line 2376 (`lead-all` 2400). `tools/harness.test.ts`
+  `gh issue create`. Prompts 747, 731, 704 and 746 tokens (helper budget 750); routing lines
+  62 to 81 (budget 100); `lead` with every line 2395 (`lead-all` 2400). `tools/harness.test.ts`
   holds the source to the contract: rules, folders, report formats and profiles. After an
   independent review (APPROVE, eight notes): `lead`'s own rules allow only the default
   helpers and the plugin allows an optional one while it is on, so a user's own agent with its
@@ -771,8 +771,24 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   real-model runs only with the owner's approval of the quota. Six cases: `tester-break`,
   `builder-off`, `review-off`, `data-question` (a generated year of readings, checked against
   Python), `designer-page`, `researcher-compare`. `tester-break` and `review-off` pass on the
-  stand-in; the runner takes a command's refusal as its turn's answer. Real-model runs not done
-- [ ] Owner's approval: real-model runs of the six new cases
+  stand-in; the runner takes a command's refusal as its turn's answer
+- [x] Tiago: Real-model runs of the six new cases, approved by the owner: default profile,
+  opencode 2.2.5, one run each, $6.02 (`evals/results/optional-helpers.md`). Five passed:
+  `review-off` ($0, no request), `builder-off` ($0.12), `data-question` ($0.20),
+  `tester-break` ($0.53), `designer-page` ($1.56). `researcher-compare` timed out at 20
+  minutes ($3.61): the researcher went far beyond the small experiment the brief asked for and
+  wrote its report only at the end. In `data-question`, `lead`'s brief sent the data
+  scientist's scripts outside the project, since its routing line no longer named its folder.
+  Fixed: the researcher matches its depth to the brief and keeps its report file current; the
+  routing line names `.ecmwf-multi-agents/data/` as not a project file; the case checks for a
+  script there. Rerun of the two, $3.98 (`evals/results/optional-helpers-rerun.md`):
+  `researcher-compare` passed in 15 minutes ($3.75); `data-question` kept its scripts in the
+  data folder and answered correctly, but failed a check that did not accept the typographic
+  minus sign of "−2.7", now fixed and passing on that answer
+- [ ] Researcher cost: `researcher-compare` costs $3.50 and 15 minutes in the researcher
+  (Claude Opus 5.5 at max effort, 35 requests) for a small experiment; it searched the web six
+  times and downloaded two WMO guides. Measure the case at effort `high`, or with a step
+  limit below 80, and choose with the owner
 - [ ] Tiago: Release 0.8.0 when asked
 
 Exit: `make check` and the integration suites pass on 2.2.5; each new helper and each switched
