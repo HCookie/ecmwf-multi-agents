@@ -353,7 +353,10 @@ export interface TurnRecord {
   status?: RunStatus;
   error?: string;
   durationMs?: number;
+  /** The final reply, or the message of a command that refused to run. */
   answer?: string;
+  /** Set when a command refused to run, with no turn: its message. */
+  refusal?: string;
 }
 
 export interface TranscriptPart {

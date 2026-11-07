@@ -165,7 +165,7 @@ describe.skipIf(!v2Available)(`a central install in opencode ${V2_VERSION}`, () 
   let auth = "";
   let output = "";
   let fromConfig: { agents: Record<string, ConfigAgent>; commands: Record<string, { description: string }> };
-  const projects = { plain: "", own: "", run: "" };
+  const projects = { plain: "", own: "", run: "", switched: "" };
   let model: ReturnType<typeof standIn>;
 
   /** A command in the user's sandbox, with PATH offering the binary under test as opencode. */
@@ -231,6 +231,9 @@ describe.skipIf(!v2Available)(`a central install in opencode ${V2_VERSION}`, () 
     projects.own = gitProject(path.join(box, "own"));
     write(path.join(projects.own, ".opencode", `${NAME}.jsonc`), '{ "review": "always" }\n');
     write(path.join(projects.own, ".opencode", "agents", "scout.md"), "---\nsteps: 9\n---\n\nThe project's scout.\n");
+    // A project that switches an optional helper on and scout off.
+    projects.switched = gitProject(path.join(box, "switched"));
+    write(path.join(projects.switched, ".opencode", `${NAME}.jsonc`), '{ "agents": { "researcher": { "enabled": true }, "scout": { "enabled": false } } }\n');
     // A project on the stand-in model; the site's profile inherit leaves every agent on it.
     model = standIn();
     const provider = {
@@ -287,6 +290,9 @@ describe.skipIf(!v2Available)(`a central install in opencode ${V2_VERSION}`, () 
     expect(report.settingsFiles).toEqual([path.join(central, `${NAME}.jsonc`), path.join(user, "home", ".config", "opencode", `${NAME}.jsonc`)]);
     const list = await agents(projects.plain);
     expect(list[0]?.id).toBe("lead");
+    // The central config defines lead and the default helpers; the optional ones come from the plugin when on.
+    expect(Object.keys(fromConfig.agents).sort()).toEqual(AGENTS);
+    expect(list.map((agent) => agent.id)).not.toContain("researcher");
     for (const id of AGENTS) {
       const got = list.find((agent) => agent.id === id);
       const want = fromConfig.agents[id]!;
@@ -381,6 +387,20 @@ describe.skipIf(!v2Available)(`a central install in opencode ${V2_VERSION}`, () 
     const scout = (await agents(projects.own)).find((agent) => agent.id === "scout");
     expect(scout?.steps).toBe(7);
     expect(scout?.system).toBe("The project's scout.");
+  }, 180_000);
+
+  test("a project's settings switch helpers over the central install: an optional one arrives, scout goes", async () => {
+    const report = await doctor(projects.switched);
+    expect(report).toMatchObject({ leadDefinition: "harness", helpersOn: ["builder", "reviewer", "researcher"], helpersMissing: [], helpersStray: [] });
+    const list = await within(60_000, "the switched helpers", async () => {
+      const found = await agents(projects.switched);
+      const ids = found.map((agent) => agent.id);
+      return ids.includes("researcher") && !ids.includes("scout") ? found : undefined;
+    });
+    const lead = list.find((agent) => agent.id === "lead")?.system ?? "";
+    expect(lead).toContain("\n- researcher: ");
+    expect(lead).not.toContain("\n- scout: ");
+    expect(list.find((agent) => agent.id === "researcher")?.steps).toBe(80);
   }, 180_000);
 
   test("central-enable and central-disable keep OPENCODE_CONFIG in the user's service settings; doctor checks it all", () => {

@@ -8,7 +8,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { CASES } from "./cases.ts";
+import { CASES, readingsCsv, UNITS_BUG } from "./cases.ts";
 import { checkEvalLogin, evalLoginDb, gitWorkTreeOf, importLogin, loginDbProblem, loginEnv, pipeEnv } from "./login.ts";
 import {
   applySetup,
@@ -304,9 +304,9 @@ describe("every case's setup on the fixture", () => {
       const head = applySetup(made, item.setup);
       expect(head).toMatch(/^[0-9a-f]{40}$/);
       const tests = unittest(made.project);
-      // The units bug of the review-reject and review-warm cases breaks the existing tests on
-      // purpose: the reviewer can find it.
-      expect(tests.code).toBe(item.setup === CASES.find((other) => other.id === "review-reject")?.setup ? 1 : 0);
+      // The units bug of the review cases and of tester-break breaks the existing tests on
+      // purpose: the reviewer or the tester can find it.
+      expect(tests.code).toBe(UNITS_BUG.every((step) => item.setup.includes(step)) ? 1 : 0);
       // A case may reuse another case's hidden tests; the check names the folder it runs.
       const hiddenCheck = item.checks.find((check): check is typeof check & { folder: string } => check.id === "hidden-tests" && "folder" in check);
       if (hiddenCheck) {
@@ -337,5 +337,33 @@ describe("every case's setup on the fixture", () => {
     expect(listProjectFiles(made.project, ".ecmwf-multi-agents/plans")).toEqual([".ecmwf-multi-agents/plans/json-output.md", ".ecmwf-multi-agents/plans/kelvin-output.md"]);
     const ls = exec(["ls", "-t", ".ecmwf-multi-agents/plans"], { cwd: made.project }).output.trim().split("\n");
     expect(ls).toEqual(["kelvin-output.md", "json-output.md"]);
+  });
+});
+
+describe("the generated readings of data-question", () => {
+  test("are the same every time, a year of hours for three stations, and Python finds the expected answer", () => {
+    const first = readingsCsv();
+    expect(readingsCsv()).toEqual(first);
+    const lines = first.csv.trimEnd().split("\n");
+    expect(lines[0]).toBe("station,time,temperature");
+    expect(lines).toHaveLength(1 + 3 * 365 * 24);
+    for (const station of first.stations) {
+      // Far from a rounding boundary, so any correct tool rounds the mean the same way.
+      const tenths = station.mean * 10;
+      expect(Math.abs(tenths - Math.floor(tenths) - 0.5)).toBeGreaterThan(0.05);
+    }
+    const dir = mkdtempSync(path.join(tmpdir(), "readings-"));
+    try {
+      writeFileSync(path.join(dir, "readings.csv"), first.csv);
+      const script =
+        "import csv\nrows = {}\nfor r in csv.DictReader(open('readings.csv')):\n" +
+        "    t = r['temperature']\n    if t == 'NA':\n        continue\n    v = float(t)\n" +
+        "    if -90 <= v <= 60:\n        rows.setdefault(r['station'], []).append(v)\n" +
+        "for s in sorted(rows):\n    print(s, len(rows[s]), f'{sum(rows[s]) / len(rows[s]):.1f}')\n";
+      const result = exec(["python3", "-c", script], { cwd: dir });
+      expect(result.output.trim().split("\n")).toEqual(first.stations.map((station) => `${station.id} ${station.valid} ${station.mean.toFixed(1)}`));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -3,9 +3,11 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  agentNeverRan,
   answerMentions,
   answeredDuringPlan,
   answersInline,
+  changedOnlyIn,
   committedLocally,
   completionsWakeLead,
   finishedWithin,
@@ -14,6 +16,7 @@ import {
   listsPublicFunctions,
   noChanges,
   noHelperGitWrites,
+  notReadWhole,
   noWorkaround,
   onboardChecks,
   onlyChanged,
@@ -28,6 +31,7 @@ import {
   verdict,
   WORK_FILES,
   workDirExcluded,
+  workFiles,
   writtenPaths,
 } from "./checks.ts";
 import { aggregate } from "./metrics.ts";
@@ -454,5 +458,40 @@ describe("answeredDuringPlan and overlappingHandoffs", () => {
     expect(overlap([handoff(10), handoff(60)], [message("user", "lead", "/execute"), completion(50), completion(90)]).detail).toBe("1 of 2 started before the first completion");
     expect(overlap([handoff(10, false), handoff(12, false)], [completion(50)]).detail).toBe("0 of 2 started before the first completion");
     expect(overlap([handoff(10)], []).detail).toBe("no background completion arrived");
+  });
+});
+
+describe("helpers switched on and off", () => {
+  test("an agent that never ran", () => {
+    const check = agentNeverRan("reviewer");
+    expect(run(check, context())).toEqual({ pass: true, detail: "reviewer never ran" });
+    const ctx = context();
+    ctx.metrics.agents.reviewer = { cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }, requests: 2, models: [], sessions: 0, toolCalls: 0, deniedToolCalls: 0, toolsByName: {}, shellCommands: [], peakContext: 0, questions: 0, permissions: 0 };
+    expect(run(check, ctx)).toEqual({ pass: false, detail: "reviewer made 2 request(s)" });
+  });
+
+  test("a data file is never read whole into an agent's context", () => {
+    const check = notReadWhole(/readings\.csv$/);
+    const read = (input: Record<string, unknown>, agent = "data-scientist"): ToolCall => ({ sessionID: "s", agent, tool: "read", status: "completed", input });
+    expect(run(check, context({ calls: [read({ path: "data/readings.csv", limit: 20 }), call("data-scientist", "head -5 data/readings.csv"), call("data-scientist", "cat data/readings.csv | wc -l")] }))).toEqual({
+      pass: true,
+      detail: "no whole read",
+    });
+    expect(run(check, context({ calls: [read({ path: "data/readings.csv" }, "lead")] })).detail).toBe("lead read data/readings.csv whole");
+    expect(run(check, context({ calls: [read({ path: "/project/data/readings.csv", limit: 5000 })] })).detail).toBe("data-scientist read /project/data/readings.csv whole");
+    expect(run(check, context({ calls: [call("data-scientist", "cd data && cat readings.csv")] })).detail).toBe("data-scientist printed readings.csv whole: cd data && cat readings.csv");
+  });
+
+  test("work files of a kind were written", () => {
+    const check = workFiles("issue-draft", "the tester wrote an issue draft", /^\.ecmwf-multi-agents\/issues\/[^/]+\.md$/);
+    expect(run(check, context({ changedFiles: ["tests/test_units.py", ".ecmwf-multi-agents/issues/fahrenheit.md"] }))).toEqual({ pass: true, detail: ".ecmwf-multi-agents/issues/fahrenheit.md" });
+    expect(run(check, context({ changedFiles: [".ecmwf-multi-agents/notes/a.md"] }))).toEqual({ pass: false, detail: "no changed file matches /^\\.ecmwf-multi-agents\\/issues\\/[^/]+\\.md$/" });
+  });
+
+  test("project files changed only where allowed", () => {
+    const check = changedOnlyIn("tests-only", "only test files changed", /^tests\//);
+    expect(run(check, context({ changedFiles: ["tests/test_units.py", ".ecmwf-multi-agents/issues/a.md"] }))).toEqual({ pass: true, detail: "changed: tests/test_units.py" });
+    expect(run(check, context({ changedFiles: [".ecmwf-multi-agents/issues/a.md"] }))).toEqual({ pass: true, detail: "no project file changed" });
+    expect(run(check, context({ changedFiles: ["tests/test_units.py", "stations/units.py"] }))).toEqual({ pass: false, detail: "also changed: stations/units.py" });
   });
 });

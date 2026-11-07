@@ -153,7 +153,8 @@ function installed(dir: string, name: string): string[] {
  * runs `touch <name>` in the shell once; every request is recorded.
  */
 function standIn() {
-  const seen: Array<{ agent: string; users: string[] }> = [];
+  /** Each request: the agent, its user messages, and the subagents its delegation tool lists. */
+  const seen: Array<{ agent: string; users: string[]; subagents?: string }> = [];
   const textOf = (message: unknown): string => {
     const content = (message as { content?: unknown } | undefined)?.content;
     if (typeof content === "string") return content;
@@ -175,14 +176,15 @@ function standIn() {
     async fetch(request) {
       const url = new URL(request.url);
       if (url.pathname.endsWith("/models")) return Response.json({ object: "list", data: [{ id: "m1", object: "model" }] });
-      const body = (await request.json().catch(() => ({}))) as { messages?: unknown[]; stream?: boolean };
+      const body = (await request.json().catch(() => ({}))) as { messages?: unknown[]; stream?: boolean; tools?: Array<{ function?: { name?: string; description?: string } }> };
       const messages = Array.isArray(body.messages) ? body.messages : [];
       const role = (message: unknown) => (message as { role?: string } | undefined)?.role;
       const system = messages.filter((message) => role(message) === "system" || role(message) === "developer").map(textOf).join("\n");
       const agent = system.includes("You are the reviewer") ? "reviewer" : system.includes("You are lead") ? "lead" : "other";
       const text = agent === "reviewer" ? "VERDICT: APPROVE\nCHECKED: the stand-in" : "lead done";
       const users = messages.filter((message) => role(message) === "user").map(textOf);
-      seen.push({ agent, users });
+      const subagents = (Array.isArray(body.tools) ? body.tools : []).find((tool) => tool?.function?.name === "subagent")?.function?.description;
+      seen.push({ agent, users, ...(subagents === undefined ? {} : { subagents }) });
       const touch = /TOUCH (\S+)/.exec(users.at(-1) ?? "");
       if (touch && body.stream && !messages.some((message) => role(message) === "tool")) {
         const call = { name: "shell", arguments: JSON.stringify({ command: `touch ${touch[1]}`, description: "touch" }) };
@@ -227,7 +229,7 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
   let stderr = "";
   let model: ReturnType<typeof standIn>;
   let embedded: EmbeddedHarness;
-  const projects = { line: "", files: "", both: "", changed: "", none: "", run: "", runFiles: "", packed: "" };
+  const projects = { line: "", files: "", both: "", changed: "", none: "", run: "", runFiles: "", packed: "", switched: "", switchedBoth: "", switchedRun: "" };
 
   const call = async <T = unknown>(method: string, route: string, project: string, body?: unknown): Promise<{ status: number; data: T }> => {
     const target = new URL(route, url);
@@ -322,6 +324,17 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
       path.join(projects.runFiles, ".opencode"),
       generated.map((file) => (file.path.startsWith("agents/") ? { ...file, content: file.content.replace(/^model: .*$/m, 'model: "mock/m1"') } : file)),
     );
+    // Helpers switched in a project's settings: two optional ones on, builder off; from the line
+    // alone, and with the generated files as well, whose builder the plugin must remove.
+    const switches = { path: `${NAME}.jsonc`, content: '{ "agents": { "tester": { "enabled": true }, "designer": { "enabled": true }, "builder": { "enabled": false } } }\n' };
+    projects.switched = gitProject(path.join(box, "switched"), { plugins: [line] });
+    writeAll(path.join(projects.switched, ".opencode"), [switches]);
+    projects.switchedBoth = gitProject(path.join(box, "switched-both"), { plugins: [line] });
+    writeAll(path.join(projects.switchedBoth, ".opencode"), [...generated, switches]);
+    projects.switchedRun = gitProject(path.join(box, "switched-run"), { plugins: [line], model: "mock/m1", provider: { mock: provider } });
+    writeAll(path.join(projects.switchedRun, ".opencode"), [
+      { path: `${NAME}.jsonc`, content: '{ "profile": "inherit", "agents": { "tester": { "enabled": true }, "scout": { "enabled": false }, "reviewer": { "enabled": false } } }\n' },
+    ]);
     const globalConfig = path.join(box, "home", ".config", "opencode");
     mkdirSync(globalConfig, { recursive: true });
     writeFileSync(path.join(globalConfig, "opencode.json"), `${JSON.stringify({ permissions: GLOBAL_PERMISSIONS }, null, 2)}\n`);
@@ -576,5 +589,75 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
     await call("POST", `/api/session/${session.id}/synthetic`, projects.run, { text: report });
     const woken = await within(60_000, "lead to be woken by the report", async () => model.seen.find((item) => item.agent === "lead" && item.users.at(-1) === report));
     expect(woken.users.some((user) => user.startsWith("Review the target below"))).toBe(true);
+  }, 180_000);
+
+  test("settings switch helpers on and off, whether the helpers come from the line or from files", async () => {
+    const tester = embedded.agents.find((agent) => agent.id === "tester")!;
+    const designer = embedded.agents.find((agent) => agent.id === "designer")!;
+    for (const project of [projects.switched, projects.switchedBoth]) {
+      await active(project);
+      // The plugin registers tester at once; lead's list follows when its late transform runs.
+      const list = await within(60_000, `the switched helpers of ${path.basename(project)}`, async () => {
+        const found = await agents(project);
+        const ids = found.map((agent) => agent.id);
+        const lead = found.find((agent) => agent.id === "lead")?.system ?? "";
+        return ids.includes("tester") && !ids.includes("builder") && lead.includes("\n- tester: ") ? found : undefined;
+      });
+      const ids = list.map((agent) => agent.id);
+      for (const id of ["lead", "scout", "reviewer", "tester", "designer"]) expect([path.basename(project), id, ids.includes(id)]).toEqual([path.basename(project), id, true]);
+      for (const id of ["builder", "researcher", "data-scientist"]) expect([path.basename(project), id, ids.includes(id)]).toEqual([path.basename(project), id, false]);
+      const got = pick(list.find((agent) => agent.id === "tester"))!;
+      expect(got).toMatchObject({ system: tester.system, mode: "subagent", steps: 60, model: { providerID: "github-copilot", id: "gpt-6.1-sol", variant: "high" } });
+      // Its own rules, in order, after the user's global ones.
+      expect(JSON.stringify(got.permissions)).toContain(JSON.stringify(tester.permissions).slice(1, -1));
+      const lead = list.find((agent) => agent.id === "lead")!.system!;
+      expect(lead).toContain(`\n- tester: ${tester.routing}\n- designer: ${designer.routing}\n- ${embedded.helperOff}\n`);
+      expect(lead).not.toContain("\n- builder: ");
+      const doctor = await call<{ output?: Record<string, unknown> }>("POST", `/api/rpc/${NAME}/doctor`, project, { input: {} });
+      expect(doctor.data.output).toMatchObject({
+        leadDefinition: "harness",
+        helpersOn: ["scout", "reviewer", "tester", "designer"],
+        helpersOff: ["builder", "researcher", "data-scientist"],
+        helpersMissing: [],
+        helpersStray: [],
+        problems: [],
+      });
+    }
+  }, 180_000);
+
+  test("with scout and the reviewer off, lead's delegation tool lists only the helpers that are on; /review refuses with its message and no turn, /progress runs on lead", async () => {
+    const project = projects.switchedRun;
+    await active(project);
+    await Bun.sleep(4_000);
+    const session = (await call<{ id: string }>("POST", "/api/session", project, { agent: "lead", location: { directory: project } })).data;
+    const asked = model.seen.length;
+    await call("POST", `/api/session/${session.id}/prompt`, project, { text: "hello" });
+    const request = await within(30_000, "lead's request", async () => model.seen.slice(asked).find((item) => item.agent === "lead" && item.users.at(-1) === "hello"));
+    for (const id of ["builder", "tester"]) expect([id, request.subagents?.includes(`\n- ${id}: `)]).toEqual([id, true]);
+    for (const id of ["scout", "reviewer", "researcher", "designer", "data-scientist"]) expect([id, request.subagents?.includes(`\n- ${id}: `)]).toEqual([id, false]);
+    type Message = { type?: string; text?: string; content?: Array<{ type?: string; text?: string }> };
+    const messages = () => get<Message[]>(`/api/session/${session.id}/message`, project);
+    await within(30_000, "lead's answer", async () =>
+      (await messages()).some((message) => message.type === "assistant" && message.content?.some((part) => part.text === "lead done")) ? true : undefined,
+    );
+    await Bun.sleep(1_000);
+
+    const reviewed = model.seen.length;
+    const before = (await messages()).length;
+    // The command fails with the plugin's message, which a client shows; nothing reaches a model.
+    const refused = await call<{ _tag?: string; command?: string; message?: string }>("POST", `/api/session/${session.id}/command`, project, { name: "review", text: "main" });
+    expect(refused.status).toBeGreaterThanOrEqual(400);
+    expect(refused.data).toMatchObject({ _tag: "CommandExecutionError", command: "review" });
+    expect(refused.data.message).toContain('is switched off here, so /review cannot run and nothing is reviewed. To switch it on, set "agents": { "reviewer": { "enabled": true } }');
+    await Bun.sleep(2_000);
+    expect(model.seen.slice(reviewed)).toEqual([]);
+    expect((await messages()).length).toBe(before);
+
+    expect((await call("POST", `/api/session/${session.id}/command`, project, { name: "progress", text: "" })).status).toBeLessThan(300);
+    const progress = await within(30_000, "lead to answer /progress", async () =>
+      model.seen.slice(reviewed).find((item) => item.agent === "lead" && item.users.at(-1)?.startsWith("Report progress on a plan")),
+    );
+    expect(progress.users.at(-1)).toContain("Plans are Markdown files");
+    expect((await get<{ agent?: string }>(`/api/session/${session.id}`, project)).agent).toBe("lead");
   }, 180_000);
 });

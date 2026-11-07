@@ -724,3 +724,75 @@ export function runChecks(checks: Check[], ctx: CheckContext): CheckOutcome[] {
   }
   return outcomes;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Helpers switched on and off
+
+/** The agent made no model request in the run. */
+export function agentNeverRan(agent: string): Check {
+  return {
+    id: `${agent}-never-ran`,
+    title: `${agent} never ran`,
+    variants: ["harness"],
+    run(ctx) {
+      const requests = ctx.metrics.agents[agent]?.requests ?? 0;
+      return requests === 0 ? ok(`${agent} never ran`) : fail(`${agent} made ${requests} request(s)`);
+    },
+  };
+}
+
+/** The most lines a read of a matching file may ask for and still count as a look, not a read. */
+const LOOK_LINES = 50;
+
+/**
+ * No agent read a matching data file whole: a read without a small line limit, or `cat`, `less`
+ * or `more` of it at the end of a pipeline, whose output reaches the model.
+ */
+export function notReadWhole(file: RegExp): Check {
+  return {
+    id: "not-read-whole",
+    title: `no agent read ${file} whole into its context`,
+    run(ctx) {
+      for (const call of ctx.metrics.toolCalls) {
+        if (call.tool === "read" && typeof call.input.path === "string" && file.test(call.input.path)) {
+          const limit = call.input.limit;
+          if (typeof limit !== "number" || limit > LOOK_LINES) return fail(`${call.agent} read ${call.input.path} whole`);
+        }
+        if (call.tool !== "shell" || call.command === undefined) continue;
+        for (const pipeline of call.command.split(/&&|\|\||[;\n]/)) {
+          const last = pipeline.split("|").at(-1)?.trim().split(/\s+/) ?? [];
+          if (["cat", "less", "more"].includes(last[0] ?? "") && last.slice(1).some((word) => file.test(word))) {
+            return fail(`${call.agent} printed ${last.slice(1).find((word) => file.test(word))} whole: ${call.command}`);
+          }
+        }
+      }
+      return ok("no whole read");
+    },
+  };
+}
+
+/** At least one changed file matches: work files of one kind were written. */
+export function workFiles(id: string, title: string, pattern: RegExp): Check {
+  return {
+    id,
+    title,
+    run(ctx) {
+      const found = ctx.changedFiles.filter((file) => pattern.test(file));
+      return found.length > 0 ? ok(found.join(", ")) : fail(`no changed file matches ${pattern}`);
+    },
+  };
+}
+
+/** Every changed project file, outside the work folder, matches the pattern. */
+export function changedOnlyIn(id: string, title: string, allowed: RegExp): Check {
+  return {
+    id,
+    title,
+    run(ctx) {
+      const changed = ctx.changedFiles.filter((file) => !WORK_FILES.test(file));
+      const extra = changed.filter((file) => !allowed.test(file));
+      if (extra.length > 0) return fail(`also changed: ${extra.join(", ")}`);
+      return ok(changed.length === 0 ? "no project file changed" : `changed: ${changed.join(", ")}`);
+    },
+  };
+}

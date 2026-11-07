@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Api, driveTurn, Executions } from "./opencode.ts";
 import { DEFAULT_POLICY } from "./policy.ts";
-import type { FormRequest, PermissionRecord, PermissionRequest, QuestionRecord } from "./types.ts";
+import type { FormRequest, PermissionRecord, PermissionRequest, QuestionRecord, Turn } from "./types.ts";
 
 const SESSION = "ses_1";
 
@@ -18,6 +18,8 @@ interface Stub {
   formReplies: number[];
   formCancels: number[];
   log: string[];
+  /** How POST .../command answers: a status and a JSON body. */
+  command?: { status: number; body: unknown };
 }
 
 let server: ReturnType<typeof Bun.serve> | undefined;
@@ -38,6 +40,7 @@ function serve(stub: Stub): Api {
       if (route === `GET /api/session/${SESSION}`) return json({ id: SESSION, agent: "lead" });
       if (route === "GET /api/session") return json([]);
       if (route === `POST /api/session/${SESSION}/prompt`) return json({ id: "msg_1" });
+      if (route === `POST /api/session/${SESSION}/command`) return stub.command ? Response.json(stub.command.body, { status: stub.command.status }) : new Response(null, { status: 204 });
       if (route === "GET /api/session/active") return json({});
       if (route === `GET /api/session/${SESSION}/inbox`) return json([]);
       if (route === `GET /api/session/${SESSION}/message`) {
@@ -77,14 +80,14 @@ function serve(stub: Stub): Api {
 const permission: PermissionRequest = { id: "per_1", sessionID: SESSION, action: "shell", resources: ["ls"] };
 const form: FormRequest = { id: "frm_1", sessionID: SESSION, fields: [{ key: "q0", type: "string", description: "Which?", options: [{ value: "a", label: "A" }] }] };
 
-async function drive(stub: Stub) {
+async function drive(stub: Stub, turn: Turn = { kind: "prompt", text: "go" }) {
   const api = serve(stub);
   const permissions: PermissionRecord[] = [];
   const questions: QuestionRecord[] = [];
   const result = await driveTurn({
     api,
     sessionID: SESSION,
-    turn: { kind: "prompt", text: "go" },
+    turn,
     agent: "lead",
     policy: DEFAULT_POLICY,
     deadline: Date.now() + 20_000,
@@ -120,5 +123,20 @@ describe("answering requests", () => {
     expect(stub.log).toEqual(["form reply 204"]);
     expect(questions[0]).toMatchObject({ id: "frm_1", answers: [["A"]] });
     expect(questions[0]!.cancelled).toBeUndefined();
+  });
+});
+
+describe("commands", () => {
+  const quiet = (): Stub => ({ permissions: [], forms: [], permissionReplies: [], formReplies: [], formCancels: [], log: [] });
+  const review: Turn = { kind: "command", command: "review", arguments: "" };
+
+  test("a command that refuses to run ends the turn at once, with its message as the refusal", async () => {
+    const message = "The reviewer is switched off here, so /review cannot run.";
+    const { result } = await drive({ ...quiet(), command: { status: 500, body: { _tag: "CommandExecutionError", command: "review", message } } }, review);
+    expect(result).toEqual({ status: "completed", refusal: message });
+  });
+
+  test("any other failure of the command call still fails the run", async () => {
+    await expect(drive({ ...quiet(), command: { status: 404, body: { _tag: "NotFoundError", message: "Command not found: review" } } }, review)).rejects.toThrow("HTTP 404");
   });
 });

@@ -141,7 +141,7 @@ export class Api {
       signal: AbortSignal.timeout(options.timeoutMs ?? 60_000),
     });
     const text = await response.text();
-    if (!response.ok) throw new Error(`${method} ${route}: HTTP ${response.status} ${text.slice(0, 500)}`);
+    if (!response.ok) throw new ApiError(`${method} ${route}: HTTP ${response.status} ${text.slice(0, 500)}`, response.status, text);
     return (text ? JSON.parse(text) : undefined) as T;
   }
 
@@ -367,6 +367,34 @@ export interface TurnContext {
 export interface TurnResult {
   status: RunStatus;
   error?: string;
+  /** A command that refused to run: its message, which a client shows instead of a reply. */
+  refusal?: string;
+}
+
+/** A reply with an error status, with its whole body. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * The message of a command that refused to run: opencode fails a command whose code throws with
+ * a CommandExecutionError carrying the error's message, and starts no turn (the harness's
+ * `/review` with the reviewer switched off).
+ */
+export function commandRefusal(error: unknown): string | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  try {
+    const body = JSON.parse(error.body) as { _tag?: unknown; message?: unknown };
+    return body._tag === "CommandExecutionError" && typeof body.message === "string" ? body.message : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -401,7 +429,13 @@ export async function driveTurn(ctx: TurnContext): Promise<TurnResult> {
     const sent = await api.data<{ id?: string }>("POST", `/api/session/${root}/prompt`, { text: ctx.turn.text });
     if (sent?.id && sent.id > marker) marker = sent.id;
   } else {
-    await api.call("POST", `/api/session/${root}/command`, { name: ctx.turn.command, text: ctx.turn.arguments ?? "" });
+    try {
+      await api.call("POST", `/api/session/${root}/command`, { name: ctx.turn.command, text: ctx.turn.arguments ?? "" });
+    } catch (error) {
+      const refusal = commandRefusal(error);
+      if (refusal === undefined) throw error;
+      return { status: "completed", refusal };
+    }
   }
 
   let sawBusy = false;

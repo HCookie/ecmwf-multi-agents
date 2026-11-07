@@ -731,8 +731,9 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   headless screenshot from the shell); a plugin command that answers without a model turn.
   Addendum in `docs/research/opencode-v2.md`: the late transform can `remove` any agent and
   a removed one leaves the subagent list; opencode's browser tools only work in the session a
-  desktop browser attached to, so no helper gets a browser rule; `session.synthetic` with
-  `resume: false` posts a notice without a turn
+  desktop browser attached to, so no helper gets a browser rule; a command that throws fails
+  with its message, which the TUI shows, and starts no turn (a synthetic message with
+  `resume: false` waits in the inbox until the next run, found by the integration test)
 - [x] Tiago: ADR 0005 and `docs/architecture.md`: optional and switchable helpers (roles,
   permissions, routing, settings, profiles, work files). The optional helpers come only from
   the plugin (no generated file, no central entry), registered only when on
@@ -747,8 +748,9 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   helper tools and `doctor`'s comparison cover every helper. Registration brings only the
   helpers that are on; a default helper that is off is removed by the late transform; a
   user's own agent with an optional helper's name is left alone (`plugin/helper-list.ts`)
-- [x] Tiago: Commands with a helper off: `/progress` on `lead`, `/review` explains with a
-  notice and no model turn. `/onboard` and the plan skill wording go with the skills task
+- [x] Tiago: Commands with a helper off: `/progress` on `lead`, `/review` refuses with a
+  message naming the setting, and no model turn. `/onboard` and the plan skill wording go with
+  the skills task
 - [x] Tiago: `doctor` and the installer report each helper on or off and the file that chose
   it, and helpers opencode did not follow
 - [x] Tiago: The four agents: prompts, permissions, profiles, routing lines; `lead` asks before
@@ -757,10 +759,16 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   holds the source to the contract: rules, folders, report formats and profiles
 - [x] Tiago: Guide and plan skills, README, install guide, changelog. The guide grew to 1736
   tokens, so the skill budget went from 1500 to 1750 (reason in the manifest)
-- [ ] Tiago: Integration tests on 2.2.5 (a `plugins` line, a file install, a central install)
-  with `tester` and `designer` on and `builder` off
-- [ ] Tiago: Eval cases for the new helpers and a helper switched off, passing on the stand-in;
-  real-model runs only with the owner's approval of the quota
+- [x] Tiago: Integration tests on 2.2.5 (a `plugins` line, a file install, a central install)
+  with `tester` and `designer` on and `builder` off. Also: `lead`'s delegation tool, captured
+  by the stand-in, lists only the helpers that are on; `/progress` runs on `lead` and `/review`
+  refuses with its message and no turn; `doctor` on a real install. 67 of 67 on 2.2.5
+- [x] Tiago: Eval cases for the new helpers and a helper switched off, passing on the stand-in;
+  real-model runs only with the owner's approval of the quota. Six cases: `tester-break`,
+  `builder-off`, `review-off`, `data-question` (a generated year of readings, checked against
+  Python), `designer-page`, `researcher-compare`. `tester-break` and `review-off` pass on the
+  stand-in; the runner takes a command's refusal as its turn's answer. Real-model runs not done
+- [ ] Owner's approval: real-model runs of the six new cases
 - [ ] Tiago: Release 0.8.0 when asked
 
 Exit: `make check` and the integration suites pass on 2.2.5; each new helper and each switched

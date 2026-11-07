@@ -42,8 +42,8 @@ type Action = { tool: string; args: Record<string, unknown> } | { text: string }
 function agentOf(system: string): string {
   const lower = system.toLowerCase();
   if (lower.includes("title generator")) return "title";
-  for (const agent of ["lead", "scout", "builder", "reviewer"]) {
-    if (new RegExp(`you are (?:a |an |the )?${agent}\\b`).test(lower)) return agent;
+  for (const agent of ["lead", "scout", "builder", "reviewer", "researcher", "tester", "designer", "data scientist"]) {
+    if (new RegExp(`you are (?:a |an |the )?${agent}\\b`).test(lower)) return agent.replace(" ", "-");
   }
   return "primary";
 }
@@ -73,6 +73,18 @@ function script(agent: string, users: string[], results: number): Action {
   if (agent === "lead" && all.includes("Hand a scout, in the background")) {
     if (results === 0) return { tool: "subagent", args: { agent: "scout", description: "list functions", prompt: "List every function.", background: true } };
     return { text: "The scout has started." };
+  }
+  if (agent === "lead" && all.includes("Try hard to break")) {
+    if (results === 0) return { tool: "subagent", args: { agent: "tester", description: "break the conversions", prompt: "BREAK: try to break the conversions in stations/units.py; fix nothing." } };
+    return { text: "The tester found that fahrenheit_to_celsius multiplies instead of dividing; its issue draft is ready." };
+  }
+  if (agent === "tester") {
+    if (results === 0) return { tool: "write", args: { path: ".ecmwf-multi-agents/issues/fahrenheit-to-celsius.md", content: "# fahrenheit_to_celsius multiplies by 1.8 instead of dividing\n" } };
+    if (results === 1) {
+      const test = "import unittest\n\nfrom stations.units import celsius_to_fahrenheit, fahrenheit_to_celsius\n\n\nclass RoundTrip(unittest.TestCase):\n    def test_round_trip(self):\n        self.assertAlmostEqual(fahrenheit_to_celsius(celsius_to_fahrenheit(20.0)), 20.0)\n";
+      return { tool: "write", args: { path: "tests/test_units_break.py", content: test } };
+    }
+    return { text: "STATUS: DONE\nFINDINGS: high: fahrenheit_to_celsius multiplies by DEGREE_RATIO instead of dividing; draft .ecmwf-multi-agents/issues/fahrenheit-to-celsius.md\nTESTS: tests/test_units_break.py: a round trip\nCHECKS: none run\nNOT TESTED: the other units" };
   }
   if (agent === "scout") {
     if (results === 0) return { tool: "grep", args: { pattern: "VALID_M" } };
@@ -288,6 +300,36 @@ describe.skipIf(!enabled)(`eval runner end to end (${name}, stand-in model)`, ()
       ["no-changes", true],
     ]);
     expect(record.metrics.childSessions).toEqual({ scout: 1 });
+    expect(record.pass).toBe(true);
+  }, 400_000);
+
+  test("harness, tester-break: the project's settings switch tester on; lead hands it the work, and it writes only a test and an issue draft", async () => {
+    const record = keep(await runCase(byId("tester-break"), options("harness")));
+    expect(record.error).toBeUndefined();
+    expect(record.checks.map((check) => [check.id, check.pass])).toEqual([
+      ["tester-sessions", true],
+      ["tester-report", true],
+      ["issue-draft", true],
+      ["tests-only", true],
+    ]);
+    expect(record.metrics.childSessions).toEqual({ tester: 1 });
+    expect(record.metrics.agents.tester!.toolsByName).toEqual({ write: 2 });
+    expect(record.changedFiles.sort()).toEqual([".ecmwf-multi-agents/issues/fahrenheit-to-celsius.md", "tests/test_units_break.py"]);
+    expect(record.pass).toBe(true);
+  }, 400_000);
+
+  test("harness, review-off: with the reviewer switched off, /review refuses with the plugin's message and no model turn", async () => {
+    const record = keep(await runCase(byId("review-off"), options("harness")));
+    expect(record.error).toBeUndefined();
+    expect(record.status).toBe("completed");
+    expect(record.checks.map((check) => [check.id, check.pass])).toEqual([
+      ["reviewer-off", true],
+      ["reviewer-never-ran", true],
+      ["lead-never-ran", true],
+      ["no-changes", true],
+    ]);
+    expect(record.turns[0]!.refusal).toContain("is switched off here, so /review cannot run");
+    expect(record.metrics.requests).toBe(0);
     expect(record.pass).toBe(true);
   }, 400_000);
 

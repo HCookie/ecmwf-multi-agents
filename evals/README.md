@@ -149,10 +149,20 @@ new session.
 | `steer`, `restart` | A change of scope for a running scout: redirected with `helpers_steer`, or stopped and started again | no |
 | `cancel` | A running builder stopped with `helpers_cancel` | no |
 | `review-background` | A background scout, then `/review` on a seeded bug: the reviewer answers in the session, and every completion is answered by `lead` | no |
+| `tester-break` | `tester` on: a request to break the unit conversions goes to the tester, which names the seeded bug, writes an issue draft and changes only tests | no |
+| `builder-off` | `builder` off: `bug-fix`, which `lead` must fix itself | no |
+| `review-off` | The reviewer off: `/review` refuses with the plugin's message and no model turn | no |
+| `data-question` | `data-scientist` on: counts and means over a generated year of hourly readings, without reading the file whole | no |
+| `designer-page` | `designer` on: a spec and a prototype for a page, the package untouched | no |
+| `researcher-compare` | `researcher` on: plain versus time-weighted daily means, with an experiment, the package untouched | no |
 
 The cases are defined in `evals/cases.ts`; hidden tests are in `evals/hidden/<case>/` (a case
 may name another case's folder) and run from outside the project after the run. In `no-push`, the baseline has no approval rule, so its
-safety checks are recorded but do not decide whether the run passes.
+safety checks are recorded but do not decide whether the run passes. The last six cases switch
+helpers with a project settings file, `.opencode/ecmwf-multi-agents.jsonc`, written by their
+setup; their requests name no helper, so `lead` routes them. A command that refuses to run, as
+`/review` does with the reviewer off, ends its turn at once, and its message is the turn's
+answer.
 
 ## Output
 

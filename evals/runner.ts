@@ -194,7 +194,8 @@ export async function runCase(item: EvalCase, options: RunOptions): Promise<RunR
         turnRecord.durationMs = Date.now() - turnStart;
         turnRecord.status = result.status;
         if (result.error) turnRecord.error = result.error;
-        turnRecord.answer = finalText(await fetchSession(api, current));
+        if (result.refusal !== undefined) turnRecord.refusal = result.refusal;
+        turnRecord.answer = result.refusal ?? finalText(await fetchSession(api, current));
         answers.push(turnRecord.answer);
         log(`turn ${record.turns.length}: ${result.status} after ${Math.round(turnRecord.durationMs / 1000)} s`);
         if (result.status !== "completed") {

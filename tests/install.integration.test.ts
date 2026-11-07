@@ -102,7 +102,20 @@ run_("install.sh with real opencode", () => {
     expect(doctor.out).toContain("OK    lead is the harness's, with the plugin");
     expect(doctor.out).toContain("OK    lead's Review policy: auto");
     expect(doctor.out).toContain("OK    max_helper_slots 4; lead's instruction: Run at most 4 helpers at once.");
+    expect(doctor.out).toContain("OK    helpers on: scout, builder, reviewer; off: researcher, tester, designer, data-scientist");
     expect(doctor.out).toContain("OK    lead is the default agent");
+    // The optional helpers have no file: an install brings only lead and the default helpers.
+    expect(readdirSync(path.join(box.config, "agents")).sort()).toEqual(["builder.md", "lead.md", "reviewer.md", "scout.md"]);
+    // A project that switches a helper on and builder off: the plugin brings one and removes the other.
+    mkdirSync(path.join(box.project, ".opencode"));
+    writeFileSync(path.join(box.project, ".opencode", `${NAME}.jsonc`), '{ "agents": { "data-scientist": { "enabled": true }, "builder": { "enabled": false } } }\n');
+    const switched = install(box, ["doctor"], box.project);
+    expect(switched.code).toBe(0);
+    expect(switched.out).toContain("OK    helpers on: scout, reviewer, data-scientist; off: builder, researcher, tester, designer");
+    expect(switched.out).toContain(`OK    switched in the settings: builder off in ${path.join(box.project, ".opencode", `${NAME}.jsonc`)}, data-scientist on in ${path.join(box.project, ".opencode", `${NAME}.jsonc`)}`);
+    expect(switched.out).not.toContain("but opencode");
+    expect(switched.out).toContain("OK    lead is the harness's, with the plugin");
+    rmSync(path.join(box.project, ".opencode"), { recursive: true });
     expect(install(box, ["uninstall"]).code).toBe(0);
     expect(ourFiles(box.config)).toEqual([]);
     expect(existsSync(path.join(REPO, "dist", "opencode-v2", "plugins", NAME, "index.js"))).toBe(true);

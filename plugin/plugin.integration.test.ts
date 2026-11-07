@@ -22,7 +22,7 @@ import { PLUGIN_DIR, pluginFiles } from "../tools/bundle-plugin.ts";
 import { V2_VERSION, emitV2 } from "../tools/emit-v2.ts";
 import type { OutputFile } from "../tools/types.ts";
 import { V2_CONTINUE_NOTES } from "./answer-first.ts";
-import { resolvedFixture } from "./testing.ts";
+import { HELPER_OFF, TESTER_ROUTING, resolvedFixture } from "./testing.ts";
 
 const enabled = process.env.ECMWF_MULTI_AGENTS_INTEGRATION === "1";
 const v2Bin = process.env.OPENCODE_V2_BIN ?? "opencode2";
@@ -303,6 +303,17 @@ describe.skipIf(!enabled)(`plugin in opencode ${V2_VERSION}`, () => {
       if (value === 0) expect(server!.stderr()).toContain('"max_helper_slots" must be a whole number of at least 1');
       await stop();
     }
+  }, 180_000);
+
+  test("settings switch helpers: the optional tester arrives, the installed builder goes, and lead's list follows", async () => {
+    writeSettings(box, '{ "agents": { "tester": { "enabled": true } } }', '{ "agents": { "builder": { "enabled": false } } }');
+    await start();
+    const list = await until("the switched helpers", (items) => find(items, "tester") !== undefined && find(items, "builder") === undefined);
+    expect(find(list, "tester")).toMatchObject({ system: "You are tester.", steps: 60, model: { id: "gpt-6.1-sol", providerID: "github-copilot", variant: "high" } });
+    const lead = find(list, "lead")!.system!;
+    expect(lead).toContain(`- reviewer: checks work.\n- tester: ${TESTER_ROUTING}\n- ${HELPER_OFF}\n`);
+    expect(lead).not.toContain("- builder:");
+    await stop();
   }, 180_000);
 
   test("an invalid settings file leaves the defaults", async () => {

@@ -6,10 +6,12 @@
 // in evals/hidden/<case>/ and are run from outside the project after the run.
 
 import {
+  agentNeverRan,
   answerMentions,
   answeredDuringPlan,
   answersInline,
   backgroundHandoffs,
+  changedOnlyIn,
   committedLocally,
   completionsWakeLead,
   finishedWithin,
@@ -19,6 +21,7 @@ import {
   listsPublicFunctions,
   noChanges,
   noHelperGitWrites,
+  notReadWhole,
   noWorkaround,
   onboardChecks,
   overlappingHandoffs,
@@ -33,8 +36,9 @@ import {
   verdict,
   WORK_FILES,
   workDirExcluded,
+  workFiles,
 } from "./checks.ts";
-import type { EvalCase, TurnState } from "./types.ts";
+import type { EvalCase, SetupStep, TurnState } from "./types.ts";
 
 const TEST_COMMAND = "python3 -m unittest";
 
@@ -114,7 +118,7 @@ Created: 2026-09-28
 
 // An uncommitted change with a real bug: Fahrenheit to Celsius multiplies by 1.8 instead of
 // dividing by it.
-const UNITS_BUG: EvalCase["setup"] = [
+export const UNITS_BUG: EvalCase["setup"] = [
   {
     kind: "replace",
     path: "stations/units.py",
@@ -141,6 +145,72 @@ const RANGE_TERMS: Term[] = [
 ];
 
 const RANGE_QUESTION = "While that runs: in one sentence, what temperature range does the quality check accept? Do not change any files.";
+
+/** A project settings file that switches helpers on or off (ADR 0005). */
+export function switches(agents: Record<string, boolean>): SetupStep {
+  const entries = Object.fromEntries(Object.entries(agents).map(([id, enabled]) => [id, { enabled }]));
+  return { kind: "write", path: ".opencode/ecmwf-multi-agents.jsonc", content: `${JSON.stringify({ agents: entries }, null, 2)}\n` };
+}
+
+const BUG_FIX_SETUP: SetupStep[] = [
+  { kind: "replace", path: "stations/units.py", find: '    "K": celsius_to_kelvin,', replace: '    "K": kelvin_to_celsius,' },
+  { kind: "commit", message: "refactor: tidy the unit conversion tables" },
+];
+const BUG_FIX_PROMPT =
+  "Since the last change, `python3 -m stations summary data/sample.csv --unit K` prints temperatures around -270 to -280. For this data, kelvin values should be roughly between 255 and 285. Please find the cause and fix it.";
+
+/** The quality check's valid range, as stations/quality.py has it. */
+const VALID_C = { min: -90, max: 60 };
+
+/**
+ * A year of hourly readings from three stations, generated the same way every time, with a few
+ * missing and implausible values: too long to read into a model's context. Returns the CSV and,
+ * per station, the number of valid readings and their mean.
+ */
+export function readingsCsv(): { csv: string; stations: Array<{ id: string; valid: number; mean: number }> } {
+  let seed = 20251;
+  const next = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const stations = [
+    { id: "STN-11", base: 8.43 },
+    { id: "STN-12", base: 14.12 },
+    { id: "STN-13", base: -2.7 },
+  ];
+  const sums = new Map(stations.map((station) => [station.id, { valid: 0, total: 0 }]));
+  const lines = ["station,time,temperature"];
+  const start = Date.UTC(2025, 0, 1);
+  for (let hour = 0; hour < 365 * 24; hour++) {
+    const time = `${new Date(start + hour * 3_600_000).toISOString().slice(0, 13)}:00Z`;
+    const season = Math.sin((2 * Math.PI * (hour / 24 - 105)) / 365);
+    const day = Math.sin((2 * Math.PI * ((hour % 24) - 9)) / 24);
+    for (const station of stations) {
+      const draw = next();
+      const noise = (next() - 0.5) * 6;
+      let text: string;
+      if (draw < 0.01) text = "NA";
+      else if (draw < 0.014) text = "99.9";
+      else text = (station.base + 11 * season + 4 * day + noise).toFixed(1);
+      lines.push(`${station.id},${time},${text}`);
+      const value = Number(text);
+      if (text !== "NA" && value >= VALID_C.min && value <= VALID_C.max) {
+        const sum = sums.get(station.id)!;
+        sum.valid += 1;
+        sum.total += value;
+      }
+    }
+  }
+  return {
+    csv: `${lines.join("\n")}\n`,
+    stations: stations.map((station) => {
+      const sum = sums.get(station.id)!;
+      return { id: station.id, valid: sum.valid, mean: sum.total / sum.valid };
+    }),
+  };
+}
+
+const READINGS = readingsCsv();
 
 const PROGRESS_CHECKS = [
   answerMentions("counts", "the report says 2 of 5 tasks are done", [{ label: "2 of 5", any: [/\b2\s*(?:of|\/|out of)\s*5\b/i] }], "all"),
@@ -181,18 +251,8 @@ export const CASES: EvalCase[] = [
   {
     id: "bug-fix",
     title: "Fix a seeded bug described by its symptom",
-    setup: [
-      { kind: "replace", path: "stations/units.py", find: '    "K": celsius_to_kelvin,', replace: '    "K": kelvin_to_celsius,' },
-      { kind: "commit", message: "refactor: tidy the unit conversion tables" },
-    ],
-    turns: [
-      {
-        turn: {
-          kind: "prompt",
-          text: "Since the last change, `python3 -m stations summary data/sample.csv --unit K` prints temperatures around -270 to -280. For this data, kelvin values should be roughly between 255 and 285. Please find the cause and fix it.",
-        },
-      },
-    ],
+    setup: BUG_FIX_SETUP,
+    turns: [{ turn: { kind: "prompt", text: BUG_FIX_PROMPT } }],
     checks: [hiddenTestsPass("bug-fix"), testsPass()],
     baseline: true,
   },
@@ -521,6 +581,130 @@ export const CASES: EvalCase[] = [
       { turn: { kind: "command", command: "progress", arguments: "" } },
     ],
     checks: PROGRESS_CHECKS,
+    baseline: false,
+  },
+
+  // Helpers switched on and off by a project's settings (ADR 0005). The requests name no helper:
+  // lead routes them from plain words.
+  {
+    id: "tester-break",
+    title: "With tester on: a module to break goes to the tester, which finds the bug, adds tests and drafts an issue, fixing nothing",
+    setup: [switches({ tester: true }), ...UNITS_BUG, { kind: "commit", message: "refactor: name the unit constants" }],
+    review: "never",
+    turns: [
+      {
+        turn: {
+          kind: "prompt",
+          text: "Try hard to break the temperature conversions in stations/units.py: odd inputs, edge cases, round trips. Tell me what fails, with an issue draft for each real problem. Do not fix anything.",
+        },
+      },
+    ],
+    checks: [
+      helperSessions("tester", 1),
+      reportMentions("tester", "the tester's report names the broken conversion", [{ label: "fahrenheit_to_celsius", any: [/fahrenheit_to_celsius/, /fahrenheit to celsius/i] }]),
+      workFiles("issue-draft", "an issue draft was written", /^\.ecmwf-multi-agents\/issues\/[^/]+\.md$/),
+      changedOnlyIn("tests-only", "only test files changed; the package is untouched", /^tests\//),
+    ],
+    baseline: false,
+  },
+  {
+    id: "builder-off",
+    title: "With builder off: lead fixes a seeded bug itself",
+    setup: [switches({ builder: false }), ...BUG_FIX_SETUP],
+    review: "never",
+    turns: [{ turn: { kind: "prompt", text: BUG_FIX_PROMPT } }],
+    checks: [helperSessions("builder", 0), hiddenTestsPass("bug-fix"), testsPass()],
+    baseline: false,
+  },
+  {
+    id: "review-off",
+    title: "With the reviewer off: /review refuses, saying so and how to switch it on, without a model turn",
+    setup: [switches({ reviewer: false }), ...UNITS_BUG],
+    turns: [{ turn: { kind: "command", command: "review", arguments: "" } }],
+    checks: [
+      answerMentions("reviewer-off", "the refusal says the reviewer is off and how to switch it on", [
+        { label: "switched off", any: [/switched off/i] },
+        { label: "the setting", any: ['"reviewer": { "enabled": true }'] },
+      ]),
+      agentNeverRan("reviewer"),
+      agentNeverRan("lead"),
+      noChanges(WORK_FILES, "nothing changed"),
+    ],
+    baseline: false,
+  },
+  {
+    id: "data-question",
+    title: "With data-scientist on: a question about a year of readings is answered with scripts, not by reading the file",
+    setup: [switches({ "data-scientist": true }), { kind: "write", path: "data/readings-2025.csv", content: READINGS.csv }, { kind: "commit", message: "data: add the 2025 readings" }],
+    turns: [
+      {
+        turn: {
+          kind: "prompt",
+          text:
+            "data/readings-2025.csv holds a year of hourly readings from three stations. For each station, how many readings are valid (present, and inside the range the quality check accepts), " +
+            "and what is the mean of the valid temperatures in degrees Celsius, to one decimal place? Do not change project files.",
+        },
+      },
+    ],
+    checks: [
+      helperSessions("data-scientist", 1),
+      answerMentions(
+        "statistics",
+        "the answer gives each station's number of valid readings and their mean",
+        READINGS.stations.flatMap((station) => [
+          { label: `${station.id} valid`, any: [String(station.valid), station.valid.toLocaleString("en-US")] },
+          { label: `${station.id} mean`, any: [station.mean.toFixed(1)] },
+        ]),
+      ),
+      notReadWhole(/readings-2025\.csv$/),
+      noChanges(WORK_FILES, "no project file changed (work files allowed)"),
+    ],
+    baseline: false,
+  },
+  {
+    id: "designer-page",
+    title: "With designer on: a page is designed as a spec and a prototype, and the package is untouched",
+    setup: [switches({ designer: true })],
+    turns: [
+      {
+        turn: {
+          kind: "prompt",
+          text:
+            "Design a small web page for browsing the daily summaries: pick a station and a date range, then see the table, with the unit switchable. " +
+            "For now I want only the design and a prototype I can open in a browser; do not change the package.",
+        },
+      },
+    ],
+    checks: [
+      helperSessions("designer", 1),
+      workFiles("spec", "a spec was written", /^\.ecmwf-multi-agents\/design\/[^/]+\/spec\.md$/),
+      workFiles("prototype", "a prototype was written", /^\.ecmwf-multi-agents\/design\/[^/]+\/[^/]+\.html$/),
+      noChanges(WORK_FILES, "no project file changed (work files allowed)"),
+    ],
+    baseline: false,
+  },
+  {
+    id: "researcher-compare",
+    title: "With researcher on: a question that needs depth and an experiment goes to the researcher, which changes no project file",
+    setup: [switches({ researcher: true })],
+    turns: [
+      {
+        turn: {
+          kind: "prompt",
+          text:
+            "Should the daily mean in the summaries be the plain average of the readings, or weighted by the time between readings? " +
+            "Compare the two with a small experiment on data/sample.csv and recommend one. Do not change the package.",
+        },
+      },
+    ],
+    checks: [
+      helperSessions("researcher", 1),
+      reportMentions("researcher", "the researcher's report has its experiments and its confidence", [
+        { label: "experiments", any: [/EXPERIMENTS:/] },
+        { label: "confidence", any: [/CONFIDENCE:/] },
+      ]),
+      noChanges(WORK_FILES, "no project file changed (work files allowed)"),
+    ],
     baseline: false,
   },
 ];
