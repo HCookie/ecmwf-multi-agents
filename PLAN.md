@@ -809,7 +809,8 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   work folder to the git exclude file; the routing guidance moves into the helpers'
   descriptions, which the delegation tool lists only for helpers that are on, replacing
   `lead`'s helper list and its rewrite (descriptions also show in the TUI)
-- [ ] Tiago: Release 0.8.0 when asked
+- [x] Tiago: Release 0.8.0 when asked: GitHub release `0.8.0`, and
+  `@ecmwf.int/multi-agents@0.8.0` on npm with provenance
 
 Exit: `make check` and the integration suites pass on 2.2.5; each new helper and each switched
 off helper works on the stand-in.
