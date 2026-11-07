@@ -34,8 +34,9 @@
 // at once and lead is woken.
 
 import { INLINE_USER_AND_REPORTS_WAKE_TEXT, INLINE_USER_WAKE_TEXT, INLINE_WAKE_TEXT, V2_REPORT_PREFIX, firstText, stepsV2 } from "./answer-first.ts";
+import { reviewerId } from "./apply.ts";
 import { remember } from "./helpers.ts";
-import { fillTemplate, parseModel, unwrap } from "./register.ts";
+import { commandDefinition, fillTemplate, parseModel, unwrap } from "./register.ts";
 import type { Reporter } from "./report.ts";
 import type { SessionTracker } from "./tools-v2.ts";
 import type {
@@ -231,9 +232,21 @@ export interface InlineDeps {
   ctx: V2Context;
   tracker: SessionTracker;
   helpers: ReadonlySet<string>;
+  /** The helpers that are on; every helper when left out. */
+  enabled?: ReadonlySet<string>;
   reporter: Reporter;
   /** The model the settings and profile give an agent, if any. */
   plannedModel: (agent: string) => V2ModelRef | undefined;
+}
+
+/** What `/review` says while the reviewer is switched off. */
+export function reviewerOffText(harness: EmbeddedHarness): string {
+  const reviewer = reviewerId(harness);
+  return (
+    `The ${reviewer} is switched off here, so /review cannot run and nothing is reviewed. ` +
+    `To switch it on, set "agents": { "${reviewer}": { "enabled": true } } in .opencode/${harness.name}.jsonc for this project, ` +
+    `or in ${harness.name}.jsonc in your opencode config folder for every project, then restart opencode.`
+  );
 }
 
 /** Inline runs of the helpers' commands: the commands to register and the context hook's part. */
@@ -250,19 +263,50 @@ export class Inline {
     return [session?.get, session?.prompt, session?.switchAgent, session?.wait].every((call) => typeof call === "function");
   }
 
+  /**
+   * The helpers' commands: answered inline while their helper is on and inline runs are possible,
+   * and, while it is off, run without it whatever opencode can do.
+   */
   commands(): V2CommandDefinition[] {
-    return inlineCommands(this.deps.harness, this.deps.helpers).map((command) => ({
+    const inline = this.available();
+    return inlineCommands(this.deps.harness, this.deps.helpers).flatMap((command): V2CommandDefinition[] => {
+      if (this.deps.enabled !== undefined && !this.deps.enabled.has(command.agent)) return [this.withoutHelper(command)];
+      if (!inline) return [];
+      return [
+        {
+          name: command.name,
+          ...(command.description === undefined ? {} : { description: command.description }),
+          execute: async (invocation) => {
+            // Returning first lets opencode answer the command's HTTP call; runs in a session go one by one.
+            const sessionID = invocation?.sessionID;
+            if (typeof sessionID !== "string") return;
+            const previous = this.chains.get(sessionID) ?? Promise.resolve();
+            const next = previous.then(() => this.run(command, invocation)).catch((error: unknown) => this.deps.reporter.internal(`the /${command.name} command`, error));
+            remember(this.chains, sessionID, next);
+          },
+        },
+      ];
+    });
+  }
+
+  /**
+   * A helper's command while the helper is off: `/review` says so, with a notice and no model
+   * turn, since nothing else can give an independent verdict; any other runs on lead, which does
+   * the helper's work (ADR 0005).
+   */
+  private withoutHelper(command: InlineCommand): V2CommandDefinition {
+    const { harness, ctx, reporter } = this.deps;
+    if (command.agent !== reviewerId(harness)) {
+      return commandDefinition(ctx, harness, { ...command, agent: harness.defaultAgent, subagent: false }, { reporter });
+    }
+    return {
       name: command.name,
       ...(command.description === undefined ? {} : { description: command.description }),
       execute: async (invocation) => {
-        // Returning first lets opencode answer the command's HTTP call; runs in a session go one by one.
-        const sessionID = invocation?.sessionID;
-        if (typeof sessionID !== "string") return;
-        const previous = this.chains.get(sessionID) ?? Promise.resolve();
-        const next = previous.then(() => this.run(command, invocation)).catch((error: unknown) => this.deps.reporter.internal(`the /${command.name} command`, error));
-        remember(this.chains, sessionID, next);
+        if (typeof invocation?.sessionID !== "string") return;
+        await ctx.session?.synthetic?.({ sessionID: invocation.sessionID, text: reviewerOffText(harness), description: `The ${command.agent} is off`, resume: false });
       },
-    }));
+    };
   }
 
   private async modelOf(agent: string): Promise<V2ModelRef | undefined> {

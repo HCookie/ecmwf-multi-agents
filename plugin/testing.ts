@@ -78,7 +78,13 @@ const readOnlyShell = shell(
   "tree *",
 );
 
-export const LEAD_PROMPT = "You are lead, the coordinating agent.\n\n## Review\n\nReview policy: auto\n\nThe line above sets when the reviewer checks work.\n\nRun at most 4 helpers at once. Run builders only on disjoint files.";
+export const LEAD_PROMPT =
+  "You are lead, the coordinating agent.\n\n## Review\n\nReview policy: auto\n\nThe line above sets when the reviewer checks work.\n\n" +
+  "## Helpers\n\n- scout: reads and reports.\n- builder: makes one change.\n- reviewer: checks work.\n\n" +
+  "Run at most 4 helpers at once. Run builders only on disjoint files.";
+
+export const HELPER_OFF = "Helpers not listed above are off in this project: do their work yourself.";
+export const TESTER_ROUTING = "tries to break a change; check that it changed only test files.";
 
 const agents: ResolvedAgent[] = [
   {
@@ -92,7 +98,7 @@ const agents: ResolvedAgent[] = [
     permissions: [
       { action: "question", resource: "*", effect: "allow" },
       { action: "delegate", resource: "*", effect: "deny" },
-      ...["scout", "builder", "reviewer"].map((resource): Rule => ({ action: "delegate", resource, effect: "allow" })),
+      ...["scout", "builder", "reviewer", "tester"].map((resource): Rule => ({ action: "delegate", resource, effect: "allow" })),
       ...approvalNeeded,
     ],
   },
@@ -154,6 +160,25 @@ const agents: ResolvedAgent[] = [
       ...harnessTools,
     ],
   },
+  {
+    id: "tester",
+    mode: "subagent",
+    description: "Tries to break a change.",
+    prompt: "You are tester.",
+    steps: 60,
+    model: "github-copilot/gpt-6.1-sol",
+    variant: "high",
+    optional: true,
+    routing: TESTER_ROUTING,
+    permissions: [
+      ...gitWrites,
+      { action: "shell", resource: "gh *", effect: "deny" },
+      { action: "delegate", resource: "*", effect: "deny" },
+      { action: "question", resource: "*", effect: "deny" },
+      { action: "skill", resource: "ecmwf-multi-agents-*", effect: "deny" },
+      ...harnessTools,
+    ],
+  },
 ];
 
 const anthropic = {
@@ -161,6 +186,7 @@ const anthropic = {
   scout: { model: "anthropic/claude-sonnet-5-5", effort: "medium" },
   builder: { model: "anthropic/claude-sonnet-5-5", effort: "high" },
 };
+const gptTester = { model: "github-copilot/gpt-6.1-sol", effort: "high" };
 
 /** A fresh copy of the fixture harness (tests may change it). */
 export function resolvedFixture(): ResolvedHarness {
@@ -179,7 +205,11 @@ export function resolvedFixture(): ResolvedHarness {
     ],
     skills: [{ id: "ecmwf-multi-agents-plan", description: "Plan file format and rules.", body: "# Plan\n\nRules.", hidden: true }],
     profiles: [
-      { id: "anthropic", description: "Anthropic models only.", agents: { ...anthropic, reviewer: { model: "anthropic/claude-opus-5-5", effort: "high" } } },
+      {
+        id: "anthropic",
+        description: "Anthropic models only.",
+        agents: { ...anthropic, reviewer: { model: "anthropic/claude-opus-5-5", effort: "high" }, tester: { model: "anthropic/claude-opus-5-5", effort: "high" } },
+      },
       {
         id: "copilot",
         description: "GitHub Copilot models only.",
@@ -188,11 +218,13 @@ export function resolvedFixture(): ResolvedHarness {
           scout: { model: "github-copilot/claude-sonnet-5.5", effort: "medium" },
           builder: { model: "github-copilot/claude-sonnet-5.5", effort: "high" },
           reviewer: { model: "github-copilot/gpt-6.1-sol", effort: "medium" },
+          tester: gptTester,
         },
       },
-      { id: "default", description: "Anthropic, with GPT for the reviewer.", agents: { ...anthropic, reviewer: { model: "github-copilot/gpt-6.1-sol", effort: "medium" } } },
+      { id: "default", description: "Anthropic, with GPT for the reviewer.", agents: { ...anthropic, reviewer: { model: "github-copilot/gpt-6.1-sol", effort: "medium" }, tester: gptTester } },
       { id: "inherit", description: "Every agent uses the session model.", agents: {} },
     ],
+    helperOff: HELPER_OFF,
   } satisfies ResolvedHarness);
 }
 

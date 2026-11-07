@@ -246,9 +246,10 @@ describe("registerHarness", () => {
     return { ctx, agents, skills, commands, selected: () => selected };
   }
 
-  test("creates every agent, the default agent, every skill and every command", async () => {
+  test("creates lead, the helpers on by default, the default agent, every skill and every command", async () => {
     const host = editors();
     await registerHarness(host.ctx, harness, { home: "/home/u", pluginDir: "/p/plugins/ecmwf-multi-agents", defaultAgent: true, reporter });
+    // tester is optional and off by default: the plugin is the only thing that brings it.
     expect([...host.agents.keys()]).toEqual(["lead", "scout", "builder", "reviewer"]);
     expect(host.agents.get("reviewer")).toMatchObject({ mode: "subagent", steps: 30, system: "You are reviewer.", model: { providerID: "github-copilot", id: "gpt-6.1-sol", variant: "medium" } });
     expect(host.selected()).toBe("lead");
@@ -260,5 +261,13 @@ describe("registerHarness", () => {
     const host = editors();
     await registerHarness(host.ctx, harness, { home: "/home/u", pluginDir: "/p", defaultAgent: false, reporter });
     expect(host.selected()).toBeUndefined();
+  });
+
+  test("registers the helpers the settings switch on, and none switched off", async () => {
+    const host = editors();
+    await registerHarness(host.ctx, harness, { home: "/home/u", pluginDir: "/p", defaultAgent: true, reporter, helpers: new Set(["scout", "tester"]) });
+    expect([...host.agents.keys()]).toEqual(["lead", "scout", "tester"]);
+    expect(host.agents.get("tester")).toMatchObject({ mode: "subagent", steps: 60, system: "You are tester.", model: { providerID: "github-copilot", id: "gpt-6.1-sol", variant: "high" } });
+    expect(host.agents.get("tester")!.permissions).toContainEqual({ action: "helpers_steer", resource: "*", effect: "deny" });
   });
 });

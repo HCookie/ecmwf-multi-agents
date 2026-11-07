@@ -12,6 +12,8 @@
 // and, apart from that layout, the central install's template (v2CentralFiles):
 //
 //   central/opencode.json             agents and commands inline, for OPENCODE_CONFIG
+//
+// The optional helpers get neither a file nor a central entry: the plugin registers them.
 //   central/prompts/<id>.md           an agent's prompt, without frontmatter
 //   central/prompts/commands/<id>.md  a command's template, without frontmatter
 //
@@ -181,7 +183,7 @@ export function v2CentralFiles(harness: ResolvedHarness): OutputFile[] {
   const modes = new Map(harness.agents.map((agent) => [agent.id, agent.mode] as const));
   const prompts: OutputFile[] = [];
   const agents: { [id: string]: { [key: string]: YamlValue } } = {};
-  for (const agent of [...harness.agents].sort((a, b) => compareBytes(a.id, b.id))) {
+  for (const agent of filed(harness).sort((a, b) => compareBytes(a.id, b.id))) {
     const data = v2AgentFrontmatter(agent);
     agents[agent.id] = {
       ...data,
@@ -205,10 +207,18 @@ export function v2CentralFiles(harness: ResolvedHarness): OutputFile[] {
   return [{ path: `${CENTRAL_DIR}/opencode.json`, content: JSON.stringify(config, null, 2) }, ...prompts].sort((a, b) => compareBytes(a.path, b.path));
 }
 
+/**
+ * The agents that get a file or a central entry: all but the optional helpers, which only the
+ * plugin brings, when the settings switch them on (ADR 0005).
+ */
+function filed(harness: ResolvedHarness): ResolvedAgent[] {
+  return harness.agents.filter((agent) => agent.optional !== true);
+}
+
 export const emitV2: Emitter = (harness: ResolvedHarness): OutputFile[] => {
   const modes = new Map(harness.agents.map((agent) => [agent.id, agent.mode] as const));
   const files = [
-    ...harness.agents.map((agent) => v2AgentFile(agent, harness.marker)),
+    ...filed(harness).map((agent) => v2AgentFile(agent, harness.marker)),
     ...harness.commands.map((command) => v2CommandFile(command, harness.marker, modes)),
     ...harness.skills.map((skill) => v2SkillFile(skill, harness.marker)),
   ];

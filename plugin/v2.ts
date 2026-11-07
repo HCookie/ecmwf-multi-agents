@@ -37,15 +37,17 @@
 //
 // `/review` and `/progress` are registered again, late in the same way, by a command transform:
 // their helper answers in the user's own session (inline.ts). The same `context` hook keeps that
-// helper to its brief; it sees a helper's requests there and lead's, never both at once.
+// helper to its brief; it sees a helper's requests there and lead's, never both at once. While
+// their helper is switched off, `/progress` runs on lead and `/review` posts a notice instead.
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { heldReportsV2, WAKE_TEXT } from "./answer-first.ts";
 import { applyToV2Agents, modelRef, planAgents, type AgentPlan } from "./apply.ts";
 import { processEnvironment } from "./environment.ts";
+import { enabledHelpers } from "./helper-list.ts";
 import { Activity, helperIds, toolCallBlock } from "./helpers.ts";
-import { Inline, inlineCommands } from "./inline.ts";
+import { Inline } from "./inline.ts";
 import { registerHarness } from "./register.ts";
 import { v2Reporter, type Reporter } from "./report.ts";
 import { ProblemLog, registerRpc } from "./rpc.ts";
@@ -180,6 +182,7 @@ export function createSetup(harness: EmbeddedHarness, options: V2Options = {}) {
         pluginDir: options.pluginDir ?? moduleDir(),
         defaultAgent: settings.defaultAgent,
         reporter,
+        helpers: enabledHelpers(harness, settings),
       });
       if (environment !== undefined) {
         try {
@@ -241,6 +244,7 @@ export function createSetup(harness: EmbeddedHarness, options: V2Options = {}) {
         ctx,
         tracker,
         helpers,
+        enabled: enabledHelpers(harness, settings),
         reporter,
         plannedModel: (agent) => {
           const plan = plans.find((item) => item.id === agent);
@@ -293,7 +297,7 @@ export function createSetup(harness: EmbeddedHarness, options: V2Options = {}) {
       );
       const commandTransform = ctx.command?.transform;
       const lateCommands =
-        typeof commandTransform === "function" && inline.available() && inlineCommands(harness, helpers).length > 0
+        typeof commandTransform === "function" && inline.commands().length > 0
           ? new LateTransform<V2CommandEditor>(
               (callback) => commandTransform.call(ctx.command, callback),
               (editor) => {

@@ -18,6 +18,8 @@ export interface EmbeddedHarness {
   agents: EmbeddedAgent[];
   commands: EmbeddedCommand[];
   skills: EmbeddedSkill[];
+  /** Added to the default agent's helper list when a helper that is on by default is switched off. */
+  helperOff?: string;
 }
 
 export interface EmbeddedProfile {
@@ -46,6 +48,10 @@ export interface EmbeddedAgent {
   hidden?: boolean;
   permissions?: PermissionRule[];
   system?: string;
+  /** Off until the settings switch it on, and then registered by the plugin alone. */
+  optional?: true;
+  /** Its line in the default agent's helper list, after "- <id>: ", when it is on. */
+  routing?: string;
 }
 
 /** A command as its generated file defines it, with the body as `template`. */
@@ -72,6 +78,8 @@ export type ReviewPolicy = (typeof REVIEW_POLICIES)[number];
 
 /** Per-agent settings, as written in a settings file. */
 export interface AgentOverride {
+  /** Switches a helper on or off; never set for the default agent. */
+  enabled?: boolean;
   model?: string;
   /** Reasoning effort, applied as opencode's model variant. */
   effort?: string;
@@ -338,6 +346,8 @@ export interface V2Context {
       description?: string;
       metadata?: Record<string, unknown>;
       delivery?: "steer" | "queue";
+      /** false: record the message without starting a turn (core/src/session/session.ts at v2.2.5). */
+      resume?: boolean;
     }) => Promise<unknown>;
     hook?: (name: "context", callback: (event: V2ContextEvent) => Promise<void> | void) => Promise<V2Registration>;
   };

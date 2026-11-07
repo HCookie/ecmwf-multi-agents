@@ -1410,6 +1410,15 @@ doctor_live() {
 	'' | null) note "lead's prompt has no single helper limit instruction; max_helper_slots ${live_slots:-unknown} may not apply" ;;
 	*) ok "max_helper_slots $live_slots; lead's instruction: $live_slots_line" ;;
 	esac
+	live_on=$(json_list helpersOn)
+	live_off=$(json_list helpersOff)
+	ok "helpers on: ${live_on:-none}; off: ${live_off:-none}"
+	live_switches=$(json_list helperSwitches)
+	[ -z "$live_switches" ] || ok "switched in the settings: $live_switches"
+	live_missing=$(json_list helpersMissing)
+	[ -z "$live_missing" ] || note "switched on, but opencode did not load: $live_missing; an opencode config or another plugin may remove it"
+	live_stray=$(json_list helpersStray)
+	[ -z "$live_stray" ] || note "switched off, but opencode still has: $live_stray; this opencode may not let the plugin remove agents"
 	if [ "$live_default" = lead ]; then
 		ok "lead is the default agent"
 	else

@@ -6,7 +6,7 @@ import { applyToV2Agents, planAgents } from "./apply.ts";
 import { applyAgent } from "./register.ts";
 import { ProblemLog, agentConfigFiles, agentFiles, doctorReport, registerRpc, type DoctorInput } from "./rpc.ts";
 import { loadSettings } from "./settings.ts";
-import { embeddedFixture, fakeEnvironment } from "./testing.ts";
+import { TESTER_ROUTING, embeddedFixture, fakeEnvironment } from "./testing.ts";
 import type { V2AgentInfo, V2Context, V2RpcDefinition } from "./types.ts";
 import { createTui, type TuiContext } from "./tui.ts";
 
@@ -45,7 +45,7 @@ describe("doctor", () => {
   test("reports the harness's lead, its review line, the settings with their files, problems and plugins", async () => {
     const lead = loadedLead(ALWAYS);
     expect(lead.model).toEqual({ providerID: "github-copilot", id: "claude-opus-5.5", variant: "xhigh" });
-    const doctor = input(ALWAYS, { data: [lead, { id: "build" }] }, [
+    const doctor = input(ALWAYS, { data: [lead, { id: "build" }, { id: "scout" }, { id: "builder" }, { id: "reviewer" }] }, [
       { id: "opencode.agent", state: { status: "active" } },
       { id: "opencode.broken", state: { status: "failed", error: "boom" } },
       { id: "ecmwf-multi-agents", state: { status: "active" } },
@@ -68,6 +68,11 @@ describe("doctor", () => {
       settings: { review: "always", profile: "copilot", default_agent: true, max_helper_slots: 8, agents: { scout: { steps: 9 }, lead: { steps: 40 } } },
       settingsFiles: [file],
       settingsSources: { review: file, profile: file, max_helper_slots: file, "agents.scout.steps": file, "agents.lead.steps": file },
+      helpersOn: ["scout", "builder", "reviewer"],
+      helpersOff: ["tester"],
+      helperSwitches: [],
+      helpersMissing: [],
+      helpersStray: [],
       problems: [{ problem: "x: something", notify: true }],
       plugins: [
         { id: "opencode.broken", status: "failed", error: "boom" },
@@ -136,6 +141,29 @@ describe("doctor", () => {
 
   test("the review policy the settings choose is not a change; with no settings, the harness's own lead", async () => {
     expect(await doctorReport(input({}, [loadedLead({})]))).toMatchObject({ leadDefinition: "harness", reviewLine: "Review policy: auto", leadModel: "anthropic/claude-opus-5-5#xhigh" });
+  });
+
+  test("helpers switched on and off: which, the files that switched them, and any opencode did not follow", async () => {
+    const project = "/repo/.opencode/ecmwf-multi-agents.jsonc";
+    const files = {
+      [`${GLOBAL}/ecmwf-multi-agents.jsonc`]: '{ "review": "always", "agents": { "tester": { "enabled": true } } }',
+      [project]: '{ "agents": { "builder": { "enabled": false }, "reviewer": { "enabled": false } } }',
+    };
+    const lead = loadedLead(files);
+    expect(lead.system).toContain("Review policy: never");
+    // builder is still loaded and tester is not: something else defines or removes them.
+    const report = await doctorReport(input(files, [lead, { id: "scout" }, { id: "builder" }]));
+    expect(report).toMatchObject({
+      leadDefinition: "harness",
+      reviewLine: "Review policy: never",
+      helpersOn: ["scout", "tester"],
+      helpersOff: ["builder", "reviewer"],
+      helperSwitches: [`builder off in ${project}`, `reviewer off in ${project}`, `tester on in ${GLOBAL}/ecmwf-multi-agents.jsonc`],
+      helpersMissing: ["tester"],
+      helpersStray: ["builder"],
+    });
+    // The list the settings write is the harness's own lead, not a change.
+    expect(lead.system).toContain(`- tester: ${TESTER_ROUTING}`);
   });
 
   test("lead missing", async () => {

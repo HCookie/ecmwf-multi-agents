@@ -45,7 +45,7 @@ function manifest(): Json {
 }
 
 const MARKDOWN: Record<string, string> = {
-  "agents/lead.md": "You are lead.\n\nReview policy: auto\n",
+  "agents/lead.md": "You are lead.\n\nReview policy: auto\n\n- scout: looks.\n- builder: builds.\n",
   "agents/scout.md": "You are scout.\n",
   "agents/builder.md": "You build.\n",
   "fragments/helper.md": "Helpers never ask.\n",
@@ -238,7 +238,7 @@ describe("output", () => {
     await build(run);
     expect(run.lines).toEqual([
       "kind     id        tokens budget",
-      "agent    lead           9   1000 lead",
+      "agent    lead          18   1000 lead",
       "agent    scout          4    500 helper",
       "agent    builder        8    500 helper",
       "command  execute        5    300 command",
@@ -335,7 +335,7 @@ describe("cleanup", () => {
     expect(await readFile(path.join(root, "outside.md"), "utf8")).toBe("original\n");
     const target = path.join(root, "dist/p1/agents/lead.md");
     expect((await lstat(target)).isFile()).toBe(true);
-    expect(await readFile(target, "utf8")).toBe("one lead\nYou are lead.\n\nReview policy: auto\n");
+    expect(await readFile(target, "utf8")).toBe("one lead\nYou are lead.\n\nReview policy: auto\n\n- scout: looks.\n- builder: builds.\n");
   });
 });
 
@@ -442,9 +442,16 @@ describe("checks", () => {
   });
 
   test("a missing review policy line stops the build", async () => {
-    const root = await fixture({ markdown: { "agents/lead.md": "You are lead." } });
+    const root = await fixture({ markdown: { "agents/lead.md": "You are lead.\n\n- scout: looks.\n- builder: builds.\n" } });
     expect(await failure(build(options(root)))).toEqual([
       'src/agents/lead.md: agents.lead.prompt: has no line "Review policy: auto"',
+    ]);
+  });
+
+  test("a default helper missing from the default agent's list stops the build", async () => {
+    const root = await fixture({ markdown: { "agents/lead.md": "You are lead.\n\nReview policy: auto\n\n- scout: looks.\n" } });
+    expect(await failure(build(options(root)))).toEqual([
+      'src/agents/lead.md: agents.lead.prompt: has no line "- builder: ..."; the plugin removes that line when builder is switched off',
     ]);
   });
 
@@ -460,7 +467,7 @@ describe("checks", () => {
     m.agents.lead.extra = true;
     const root = await fixture({ manifest: m });
     expect(await failure(build(options(root)))).toEqual([
-      "src/manifest.jsonc: agents.lead.extra: unknown key; allowed keys are mode, description, prompt, budget, steps, color and permissions",
+      "src/manifest.jsonc: agents.lead.extra: unknown key; allowed keys are mode, description, prompt, budget, steps, color, permissions, optional and routing",
     ]);
   });
 });

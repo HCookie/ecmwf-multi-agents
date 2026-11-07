@@ -47,6 +47,15 @@ export interface DoctorView {
   settings: { review: string; profile: string; default_agent: boolean; max_helper_slots: number; agents: Record<string, unknown> };
   settingsFiles: string[];
   settingsSources: Record<string, string>;
+  /** The helpers the settings leave on, and those they leave off, in harness order. */
+  helpersOn: string[];
+  helpersOff: string[];
+  /** Each helper a settings file switched, as "<id> on in <file>" or "<id> off in <file>". */
+  helperSwitches: string[];
+  /** Helpers that are on but that opencode did not load. */
+  helpersMissing: string[];
+  /** Default helpers that are off but that opencode still loaded. */
+  helpersStray: string[];
   problems: ProblemView[];
   plugins: Array<{ id: string | null; status: string | null; error?: string }>;
 }

@@ -7,6 +7,7 @@
 // `variant`. Every function works out all changes before making any, so an unexpected shape
 // changes nothing.
 
+import { enabledHelpers, helpersOf, rewriteHelperList } from "./helper-list.ts";
 import type { EmbeddedHarness, Problem, ReviewPolicy, Settings, V2AgentEditor, V2ModelRef } from "./types.ts";
 
 /** The model, reasoning effort and step limit one agent ends up with. */
@@ -102,17 +103,44 @@ export function modelRef(model: string, effort: string | undefined): V2ModelRef 
   return ref;
 }
 
+/** The agent `/review` runs on: the reviewer, without which nothing is reviewed. */
+export function reviewerId(harness: EmbeddedHarness): string {
+  return harness.commands.find((command) => command.name === "review")?.agent ?? "reviewer";
+}
+
+/** The review policy in force: `never` while the reviewer is switched off. */
+export function effectiveReview(harness: EmbeddedHarness, settings: Settings, on: ReadonlySet<string> = enabledHelpers(harness, settings)): ReviewPolicy {
+  const reviewer = reviewerId(harness);
+  return helpersOf(harness).some((helper) => helper.id === reviewer) && !on.has(reviewer) ? "never" : settings.review;
+}
+
+/** True when the settings switch a helper away from its default: an optional one on, or another off. */
+export function helpersSwitched(harness: EmbeddedHarness, on: ReadonlySet<string>): boolean {
+  return helpersOf(harness).some((helper) => on.has(helper.id) === (helper.optional === true));
+}
+
 /**
- * Apply plans, the review policy and the helper limit through an opencode 2 agent editor.
- * The effort goes to `model.variant`. Only agents that already exist are touched: `update`
- * would create a missing one. Returns problems to report.
+ * Apply plans, the review policy, the helper limit and the helpers switched on and off through
+ * an opencode 2 agent editor. The effort goes to `model.variant`. Only agents that already exist
+ * are touched: `update` would create a missing one. A default helper that is off is removed,
+ * whatever brought it; an optional one that is off was never registered, and an agent of the
+ * user's with its name is left alone. Returns problems to report.
  */
 export function applyToV2Agents(editor: V2AgentEditor, harness: EmbeddedHarness, settings: Settings, plans: readonly AgentPlan[]): Problem[] {
   const problems: Problem[] = [];
   const changes: Array<() => void> = [];
+  const helpers = helpersOf(harness);
+  const on = enabledHelpers(harness, settings);
+  const off = new Set(helpers.filter((helper) => !on.has(helper.id)).map((helper) => helper.id));
+
+  for (const helper of helpers) {
+    if (helper.optional === true || !off.has(helper.id) || editor.get(helper.id) === undefined) continue;
+    if (typeof editor.remove === "function") changes.push(() => editor.remove!(helper.id));
+    else problems.push({ message: `${harness.name}: this opencode cannot remove agents, so ${helper.id} stays although it is switched off`, notify: true });
+  }
 
   for (const plan of plans) {
-    if (editor.get(plan.id) === undefined) continue;
+    if (off.has(plan.id) || editor.get(plan.id) === undefined) continue;
     const model = plan.model === undefined ? undefined : modelRef(plan.model, plan.effort);
     changes.push(() =>
       editor.update(plan.id, (agent) => {
@@ -123,15 +151,28 @@ export function applyToV2Agents(editor: V2AgentEditor, harness: EmbeddedHarness,
     );
   }
 
+  const review = effectiveReview(harness, settings, on);
+  if (review !== settings.review && settings.reviewSet) {
+    problems.push({ message: `${harness.name}: the review policy "${settings.review}" needs the reviewer, which is switched off, so nothing is reviewed`, notify: true });
+  }
+
   const lead = editor.get(harness.defaultAgent);
   if (lead !== undefined) {
     if (typeof lead.system === "string") {
-      const result = rewriteReviewLine(lead.system, settings.review, harness.defaultAgent);
+      const result = rewriteReviewLine(lead.system, review, harness.defaultAgent);
       if (result.problem !== undefined) problems.push(reviewProblem(harness, settings, result.problem));
       const slots = rewriteHelperSlotsLine(result.prompt ?? lead.system, settings.maxHelperSlots, harness.defaultAgent);
       if (slots.problem !== undefined) problems.push({ message: `${harness.name}: ${slots.problem}`, notify: settings.maxHelperSlotsSet });
-      const prompt = slots.prompt ?? result.prompt;
-      if (prompt !== undefined) changes.push(() => editor.update(harness.defaultAgent, (agent) => (agent.system = prompt)));
+      let prompt = slots.prompt ?? result.prompt;
+      if (helpersSwitched(harness, on)) {
+        const list = rewriteHelperList(prompt ?? lead.system, helpers, on, harness.helperOff, harness.defaultAgent);
+        if (list.problem !== undefined) problems.push({ message: `${harness.name}: ${list.problem}`, notify: true });
+        else prompt = list.prompt;
+      }
+      if (prompt !== undefined) {
+        const system = prompt;
+        changes.push(() => editor.update(harness.defaultAgent, (agent) => (agent.system = system)));
+      }
     } else {
       problems.push(reviewProblem(harness, settings, `${harness.defaultAgent} has no prompt, so the review policy was not applied`));
       problems.push({ message: `${harness.name}: ${harness.defaultAgent} has no prompt, so max_helper_slots was not applied`, notify: settings.maxHelperSlotsSet });

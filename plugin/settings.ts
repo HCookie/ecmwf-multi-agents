@@ -27,7 +27,7 @@ export const MODEL_PATTERN = /^[^/#\s]+\/[^#\s]+$/;
 export const EFFORT_PATTERN = /^[^#\s]+$/;
 
 const TOP_KEYS = ["$schema", "review", "profile", "default_agent", "max_helper_slots", "agents"];
-const AGENT_KEYS = ["model", "effort", "steps"];
+const AGENT_KEYS = ["enabled", "model", "effort", "steps"];
 /** Agent keys that were renamed, to the name they have now. */
 const RENAMED_AGENT_KEYS: Readonly<Record<string, string>> = { variant: "effort" };
 
@@ -117,7 +117,7 @@ export function validateSettings(value: unknown, harness: EmbeddedHarness): { se
             problems.push(`"agents.${id}" must be an object with ${listWords(AGENT_KEYS)}, not ${shown(entry)}`);
             continue;
           }
-          agents[id] = validateAgent(id, entry, problems);
+          agents[id] = validateAgent(id, entry, problems, id === harness.defaultAgent);
         }
         settings.agents = agents;
         break;
@@ -133,12 +133,17 @@ export function validateSettings(value: unknown, harness: EmbeddedHarness): { se
   return problems.length > 0 ? { problems } : { settings, problems };
 }
 
-function validateAgent(id: string, entry: Record<string, unknown>, problems: string[]): AgentOverride {
+function validateAgent(id: string, entry: Record<string, unknown>, problems: string[], isDefaultAgent: boolean): AgentOverride {
   const out: AgentOverride = {};
   for (const key of Object.keys(entry)) {
     const item = entry[key];
     const name = `"agents.${id}.${key}"`;
     switch (key) {
+      case "enabled":
+        if (isDefaultAgent) problems.push(`${name} cannot be set: ${id} is always on`);
+        else if (typeof item === "boolean") out.enabled = item;
+        else problems.push(`${name} must be true or false, not ${shown(item)}`);
+        break;
       case "model":
         if (typeof item === "string" && MODEL_PATTERN.test(item)) out.model = item;
         else problems.push(`${name} must look like provider/model, without "#" or spaces, not ${shown(item)}`);

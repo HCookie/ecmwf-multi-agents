@@ -9,7 +9,7 @@ import { rewriteHelperSlotsLine } from "../plugin/apply.ts";
 import { helperIds } from "../plugin/helpers.ts";
 import { inlineCommands } from "../plugin/inline.ts";
 import { DEFAULT_MAX_HELPER_SLOTS } from "../plugin/settings.ts";
-import { resolvedFixture } from "../plugin/testing.ts";
+import { HELPER_OFF, resolvedFixture, TESTER_ROUTING } from "../plugin/testing.ts";
 import { HARNESS_CONSTANT, bundlePlugin, embedHarness, matterContent, pluginMarker, runtimeImports } from "./bundle-plugin.ts";
 import { load } from "./load.ts";
 import { resolveHarness } from "./resolve.ts";
@@ -135,20 +135,35 @@ describe("bundlePlugin", () => {
 describe("embedHarness", () => {
   test("keeps what the plugin needs: profiles, agents with their mode, and the helpers' commands", () => {
     const data = embedHarness(resolvedFixture());
-    expect(Object.keys(data)).toEqual(["name", "version", "defaultAgent", "defaultProfile", "profiles", "agents", "commands", "skills"]);
+    expect(Object.keys(data)).toEqual(["name", "version", "defaultAgent", "defaultProfile", "profiles", "agents", "commands", "skills", "helperOff"]);
     expect(data.profiles.map((profile) => profile.id)).toEqual(["anthropic", "copilot", "default", "inherit"]);
     expect(data.profiles.find((profile) => profile.id === "default")!.agents).toEqual({
       lead: { model: "anthropic/claude-opus-5-5", effort: "xhigh" },
       scout: { model: "anthropic/claude-sonnet-5-5", effort: "medium" },
       builder: { model: "anthropic/claude-sonnet-5-5", effort: "high" },
       reviewer: { model: "github-copilot/gpt-6.1-sol", effort: "medium" },
+      tester: { model: "github-copilot/gpt-6.1-sol", effort: "high" },
     });
     expect(data.agents.map((agent) => [agent.id, agent.mode])).toEqual([
       ["lead", "primary"],
       ["scout", "subagent"],
       ["builder", "subagent"],
       ["reviewer", "subagent"],
+      ["tester", "subagent"],
     ]);
+  });
+
+  test("an optional helper keeps its flag and routing line; the line for helpers that are off is embedded", () => {
+    const data = embedHarness(resolvedFixture());
+    expect(data.agents.find((agent) => agent.id === "tester")).toMatchObject({ optional: true, routing: TESTER_ROUTING, system: "You are tester.", steps: 60 });
+    for (const id of ["lead", "scout", "builder", "reviewer"]) {
+      expect(data.agents.find((agent) => agent.id === id)).not.toHaveProperty("optional");
+      expect(data.agents.find((agent) => agent.id === id)).not.toHaveProperty("routing");
+    }
+    expect(data.helperOff).toBe(HELPER_OFF);
+    const without = resolvedFixture();
+    delete without.helperOff;
+    expect(embedHarness(without)).not.toHaveProperty("helperOff");
   });
 
   test("from src/: lead and three helpers; review and progress answered inline", async () => {
@@ -199,7 +214,7 @@ describe("embedHarness", () => {
     const harness = resolvedFixture();
     const reversed = Object.fromEntries(Object.entries(harness.profiles[0]!.agents).reverse());
     harness.profiles[0]!.agents = reversed;
-    expect(Object.keys(embedHarness(harness).profiles[0]!.agents)).toEqual(["lead", "scout", "builder", "reviewer"]);
+    expect(Object.keys(embedHarness(harness).profiles[0]!.agents)).toEqual(["lead", "scout", "builder", "reviewer", "tester"]);
   });
 
   test("refuses data the plugin could not use", () => {

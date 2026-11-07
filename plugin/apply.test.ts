@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { applyToV2Agents, helperSlotsLine, planAgents, rewriteHelperSlotsLine, rewriteReviewLine } from "./apply.ts";
 import { mergeSettings } from "./settings.ts";
-import { LEAD_PROMPT, embeddedFixture, resolvedFixture } from "./testing.ts";
+import { HELPER_OFF, LEAD_PROMPT, TESTER_ROUTING, embeddedFixture, resolvedFixture } from "./testing.ts";
 import type { Settings, SettingsFile, V2AgentEditor, V2AgentInfo } from "./types.ts";
 
 const harness = embeddedFixture();
@@ -13,11 +13,14 @@ function settingsOf(...files: SettingsFile[]): Settings {
   return mergeSettings(files, harness);
 }
 
-/** A fake opencode 2.0.16 agent editor holding the emitted agents and two built-ins. */
+/**
+ * A fake opencode 2 agent editor holding a built-in and the agents a default install loads: every
+ * agent but the optional ones, which only the plugin registers, when they are on.
+ */
 function v2Editor(): V2AgentEditor & { agents: Map<string, V2AgentInfo>; selected?: string } {
   const agents = new Map<string, V2AgentInfo>();
   agents.set("build", { id: "build", mode: "primary", hidden: false, model: { id: "m", providerID: "p" } });
-  for (const item of resolvedFixture().agents) {
+  for (const item of resolvedFixture().agents.filter((agent) => agent.optional !== true)) {
     const [providerID, ...rest] = (item.model ?? "").split("/");
     agents.set(item.id, {
       id: item.id,
@@ -41,7 +44,16 @@ function v2Editor(): V2AgentEditor & { agents: Map<string, V2AgentInfo>; selecte
       agents.set(id, agent);
       update(agent);
     },
+    remove(id: string) {
+      agents.delete(id);
+    },
   };
+  return editor;
+}
+
+/** The editor after the plugin registered an optional helper that is on. */
+function withTester(editor: ReturnType<typeof v2Editor>): ReturnType<typeof v2Editor> {
+  editor.update("tester", (agent) => Object.assign(agent, { mode: "subagent", system: "You are tester.", steps: 60, model: { id: "gpt-6.1-sol", providerID: "github-copilot", variant: "high" } }));
   return editor;
 }
 
@@ -54,6 +66,7 @@ describe("planAgents", () => {
       { id: "scout", model: "anthropic/claude-sonnet-5-5", effort: "medium" },
       { id: "builder", model: "anthropic/claude-sonnet-5-5", effort: "high" },
       { id: "reviewer", model: "github-copilot/gpt-6.1-sol", effort: "medium" },
+      { id: "tester", model: "github-copilot/gpt-6.1-sol", effort: "high" },
     ]);
   });
 
@@ -197,5 +210,75 @@ describe("applyToV2Agents", () => {
     const problems = applyToV2Agents(editor, harness, settingsOf({ review: "never", max_helper_slots: 2 }), []);
     expect(problems).toEqual([{ message: 'ecmwf-multi-agents: the prompt of lead has no "Run at most ... helpers at once." instruction; max_helper_slots was not applied', notify: true }]);
     expect(editor.get("lead")!.system).toBe("Custom.\nReview policy: never");
+  });
+});
+
+describe("applyToV2Agents with helpers switched on and off", () => {
+  function apply(editor: ReturnType<typeof v2Editor>, ...files: SettingsFile[]) {
+    const settings = settingsOf(...files);
+    return applyToV2Agents(editor, harness, settings, planAgents(harness, settings).plans);
+  }
+
+  test("a default helper switched off is removed, and lead's list says so", () => {
+    const editor = v2Editor();
+    expect(apply(editor, { agents: { builder: { enabled: false, steps: 9 } } })).toEqual([]);
+    expect(editor.agents.has("builder")).toBe(false);
+    expect(editor.get("lead")!.system).toBe(LEAD_PROMPT.replace("- builder: makes one change.\n- reviewer: checks work.\n", `- reviewer: checks work.\n- ${HELPER_OFF}\n`));
+  });
+
+  test("an optional helper switched on gets its line in lead's list and its profile model", () => {
+    const editor = withTester(v2Editor());
+    expect(apply(editor, { profile: "anthropic", agents: { tester: { enabled: true } } })).toEqual([]);
+    expect(editor.get("lead")!.system).toContain(`- reviewer: checks work.\n- tester: ${TESTER_ROUTING}\n\nRun at most`);
+    expect(editor.get("tester")!.model).toEqual({ id: "claude-opus-5-5", providerID: "anthropic", variant: "high" });
+  });
+
+  test("a user's own agent with an optional helper's name is left alone while the harness's is off", () => {
+    const editor = v2Editor();
+    editor.update("tester", (agent) => Object.assign(agent, { mode: "subagent", system: "My tester.", model: { id: "mine", providerID: "me" } }));
+    expect(apply(editor, { profile: "anthropic" })).toEqual([]);
+    expect(editor.get("tester")).toMatchObject({ system: "My tester.", model: { id: "mine", providerID: "me" } });
+    expect(editor.get("lead")!.system).toBe(LEAD_PROMPT);
+  });
+
+  test("with the reviewer off nothing is reviewed; a policy a file chose is reported", () => {
+    const quiet = v2Editor();
+    expect(apply(quiet, { agents: { reviewer: { enabled: false } } })).toEqual([]);
+    expect(quiet.get("lead")!.system).toContain("\nReview policy: never\n");
+    expect(quiet.agents.has("reviewer")).toBe(false);
+
+    const editor = v2Editor();
+    expect(apply(editor, { review: "always" }, { agents: { reviewer: { enabled: false } } })).toEqual([
+      { message: 'ecmwf-multi-agents: the review policy "always" needs the reviewer, which is switched off, so nothing is reviewed', notify: true },
+    ]);
+    expect(editor.get("lead")!.system).toContain("\nReview policy: never\n");
+    expect(apply(v2Editor(), { review: "never", agents: { reviewer: { enabled: false } } })).toEqual([]);
+  });
+
+  test("a lead without the helper list is reported when helpers are switched, and the helpers still change", () => {
+    const editor = withTester(v2Editor());
+    editor.get("lead")!.system = "Custom.\nReview policy: auto\nRun at most 4 helpers at once.";
+    expect(apply(editor, { agents: { builder: { enabled: false }, tester: { enabled: true } } })).toEqual([
+      {
+        message:
+          'ecmwf-multi-agents: the prompt of lead has no line "- scout: ..."; its helper list was left as it is, so it may name helpers that are off and miss ones that are on',
+        notify: true,
+      },
+    ]);
+    expect(editor.agents.has("builder")).toBe(false);
+    expect(editor.get("lead")!.system).toBe("Custom.\nReview policy: auto\nRun at most 4 helpers at once.");
+    // With nothing switched, a custom lead's list is nobody's business.
+    const plain = v2Editor();
+    plain.get("lead")!.system = "Custom.\nReview policy: auto\nRun at most 4 helpers at once.";
+    expect(apply(plain)).toEqual([]);
+  });
+
+  test("an opencode that cannot remove agents reports the helper that stays", () => {
+    const editor = v2Editor();
+    delete (editor as Partial<V2AgentEditor>).remove;
+    expect(apply(editor, { agents: { scout: { enabled: false } } })).toEqual([
+      { message: "ecmwf-multi-agents: this opencode cannot remove agents, so scout stays although it is switched off", notify: true },
+    ]);
+    expect(editor.agents.has("scout")).toBe(true);
   });
 });

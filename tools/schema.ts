@@ -51,6 +51,20 @@ function effortHelp(agent: ResolvedAgent, harness: ResolvedHarness): string {
   return sentences.join(" ");
 }
 
+/** The switch of a helper; the default agent is always on and has none. */
+function enabledSchema(agent: ResolvedAgent, lead: string): JsonSchema {
+  const optional = agent.optional === true;
+  const meaning = optional
+    ? `${agent.id} is an optional helper, on only where a settings file switches it on.`
+    : `When it is off, ${lead} does its work itself.`;
+  return {
+    title: "On or off",
+    description: `Switch ${agent.id} on or off, for you or for one project. Default: ${!optional}${optional ? ":" : "."} ${meaning}`,
+    type: "boolean",
+    default: !optional,
+  };
+}
+
 function agentSchema(agent: ResolvedAgent, harness: ResolvedHarness): JsonSchema {
   const profile = harness.profiles.find((candidate) => candidate.id === harness.defaultProfile);
   const example = profile === undefined ? undefined : own(profile.agents, agent.id)?.model;
@@ -61,6 +75,7 @@ function agentSchema(agent: ResolvedAgent, harness: ResolvedHarness): JsonSchema
     type: "object",
     additionalProperties: false,
     properties: {
+      ...(agent.id === harness.defaultAgent ? {} : { enabled: enabledSchema(agent, harness.defaultAgent) }),
       model: {
         title: "Model",
         description:
@@ -142,7 +157,7 @@ export function settingsSchema(harness: ResolvedHarness): JsonSchema {
       },
       agents: {
         title: "Per-agent settings",
-        description: "Model, reasoning effort and step limit for single agents, applied after the profile.",
+        description: "Helpers switched on or off, and model, reasoning effort and step limit for single agents, applied after the profile.",
         type: "object",
         additionalProperties: false,
         properties: agents,

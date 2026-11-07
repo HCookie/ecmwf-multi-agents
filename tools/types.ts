@@ -87,6 +87,10 @@ export interface ResolvedAgent {
   model?: string;
   /** opencode's model variant: the profile's effort for this agent. Only set with a model. */
   variant?: string;
+  /** Off until the settings switch it on; only the plugin brings it, with no generated file. Only set when true. */
+  optional?: true;
+  /** An optional helper's line for the default agent's helper list, written after "- <id>: ". */
+  routing?: string;
 }
 
 export interface ResolvedCommand {
@@ -130,6 +134,8 @@ export interface ResolvedHarness {
   commands: ResolvedCommand[];
   skills: ResolvedSkill[];
   profiles: Profile[];
+  /** The line the plugin adds to the default agent's helper list when a default helper is off. */
+  helperOff?: string;
 }
 
 /** A generated file, with its path relative to the platform's dist directory. */

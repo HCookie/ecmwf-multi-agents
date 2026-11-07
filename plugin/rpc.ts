@@ -15,7 +15,8 @@
 //   problem   an event published for each new problem; the TUI entry shows it (tui.ts)
 
 import path from "node:path";
-import { helperSlotsLine, modelRef, planAgents, rewriteHelperSlotsLine, rewriteReviewLine } from "./apply.ts";
+import { effectiveReview, helperSlotsLine, helpersSwitched, modelRef, planAgents, rewriteHelperSlotsLine, rewriteReviewLine } from "./apply.ts";
+import { enabledHelpers, helpersOf, rewriteHelperList } from "./helper-list.ts";
 import { parseJsonc } from "./jsonc.ts";
 import { rpcDefinition, type DoctorView, type ProblemView } from "./rpc-definition.ts";
 import { findRun } from "./rule-order.ts";
@@ -151,8 +152,10 @@ export function leadChanges(lead: V2AgentInfo, harness: EmbeddedHarness, setting
   const expected: V2AgentInfo = { id: embedded.id, mode: "primary", hidden: false, permissions: [] };
   applyAgent(expected, embedded, home);
   if (typeof expected.system === "string") {
-    expected.system = rewriteReviewLine(expected.system, settings.review, embedded.id).prompt ?? expected.system;
+    const on = enabledHelpers(harness, settings);
+    expected.system = rewriteReviewLine(expected.system, effectiveReview(harness, settings, on), embedded.id).prompt ?? expected.system;
     expected.system = rewriteHelperSlotsLine(expected.system, settings.maxHelperSlots, embedded.id).prompt ?? expected.system;
+    if (helpersSwitched(harness, on)) expected.system = rewriteHelperList(expected.system, helpersOf(harness), on, harness.helperOff, embedded.id).prompt ?? expected.system;
   }
   const plan = planAgents(harness, settings).plans.find((item) => item.id === embedded.id);
   const model = plan?.model === undefined ? undefined : modelRef(plan.model, plan.effort);
@@ -198,6 +201,9 @@ export async function doctorReport(input: DoctorInput): Promise<DoctorView> {
   const plugins = (await Promise.resolve(ctx.plugin?.list?.()).then((value) => unwrap<V2PluginState[]>(value), () => undefined)) ?? [];
   const { settings } = loaded;
   const changed = lead === undefined ? [] : leadChanges(lead, harness, settings, input.environment.home);
+  const helpers = helpersOf(harness);
+  const on = enabledHelpers(harness, settings);
+  const loadedIds = new Set(agents.map((agent) => agent.id));
   return {
     name: harness.name,
     version: harness.version,
@@ -219,6 +225,15 @@ export async function doctorReport(input: DoctorInput): Promise<DoctorView> {
     },
     settingsFiles: loaded.applied,
     settingsSources: loaded.sources,
+    helpersOn: helpers.filter((helper) => on.has(helper.id)).map((helper) => helper.id),
+    helpersOff: helpers.filter((helper) => !on.has(helper.id)).map((helper) => helper.id),
+    helperSwitches: helpers.flatMap((helper) => {
+      const from = loaded.sources[`agents.${helper.id}.enabled`];
+      return from === undefined ? [] : [`${helper.id} ${on.has(helper.id) ? "on" : "off"} in ${from}`];
+    }),
+    helpersMissing: helpers.filter((helper) => on.has(helper.id) && !loadedIds.has(helper.id)).map((helper) => helper.id),
+    // An optional helper that is off is never registered, so an agent with its name is the user's.
+    helpersStray: helpers.filter((helper) => helper.optional !== true && !on.has(helper.id) && loadedIds.has(helper.id)).map((helper) => helper.id),
     problems: input.problems.list(),
     // opencode's own plugins only when they failed.
     plugins: (Array.isArray(plugins) ? plugins : [])

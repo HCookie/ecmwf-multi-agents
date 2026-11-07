@@ -70,6 +70,10 @@ export interface SourceAgent {
   steps?: number;
   color?: string;
   permissions: PermissionEntry[];
+  /** Off until the settings switch it on, and brought only by the plugin. Only set when true. */
+  optional?: true;
+  /** An optional helper's line in the default agent's helper list, after "- <id>: ". */
+  routing?: string;
 }
 
 export interface SourceCommand {
@@ -101,6 +105,8 @@ export interface Manifest {
   agents: SourceAgent[];
   commands: SourceCommand[];
   skills: SourceSkill[];
+  /** The line the plugin adds to the default agent's helper list when a default helper is off. */
+  helperOff?: string;
 }
 
 export interface Source {
@@ -126,9 +132,10 @@ const TOP_KEYS = [
   "agents",
   "commands",
   "skills",
+  "helperOff",
 ];
 const TOP_REQUIRED = ["name", "defaultAgent", "defaultProfile", "workDir", "marker", "budgets", "agents"];
-const AGENT_KEYS = ["mode", "description", "prompt", "budget", "steps", "color", "permissions"];
+const AGENT_KEYS = ["mode", "description", "prompt", "budget", "steps", "color", "permissions", "optional", "routing"];
 const AGENT_REQUIRED = ["mode", "description", "prompt", "budget"];
 const RULE_KEYS = ["action", "resource", "effect"];
 const USE_KEYS = ["use", "effect"];
@@ -461,6 +468,36 @@ function readPromptList(value: unknown, c: Checker, at: KeyPath, refs: MarkdownR
   return out;
 }
 
+/** One line of plain text, or undefined after reporting why not. */
+function readLine(value: unknown, c: Checker, at: KeyPath): string | undefined {
+  const text = c.text(value, at);
+  if (text === undefined) return undefined;
+  if (/[\r\n]/.test(text)) {
+    c.fail(at, "must be a single line");
+    return undefined;
+  }
+  return text;
+}
+
+/** The routing entry an optional helper needs and no other agent has. */
+function readRouting(id: string, entry: Record<string, unknown>, optional: boolean, c: Checker, at: KeyPath): string | undefined {
+  const where = [...at, "routing"];
+  if (!optional) {
+    if (Object.hasOwn(entry, "routing")) c.fail(where, "only an optional agent has a routing entry; the default agent's prompt lists the others");
+    return undefined;
+  }
+  if (!Object.hasOwn(entry, "routing")) {
+    c.fail(where, `required key is missing; the plugin adds this line to the default agent's prompt when ${id} is on`);
+    return undefined;
+  }
+  const routing = readLine(entry.routing, c, where);
+  if (routing !== undefined && routing.trimStart().startsWith("-")) {
+    c.fail(where, `must not start with "-"; the plugin writes "- ${id}: " before it`);
+    return undefined;
+  }
+  return routing;
+}
+
 function readAgents(
   value: unknown,
   c: Checker,
@@ -490,6 +527,12 @@ function readAgents(
     const steps = c.positiveInteger(entry.steps, [...at, "steps"]);
     const color = c.text(entry.color, [...at, "color"]);
     const permissions = readPermissions(entry.permissions, c, [...at, "permissions"], ruleSets);
+    let optional = c.boolean(entry.optional, [...at, "optional"]);
+    if (optional === true && mode !== undefined && mode !== "subagent") {
+      c.fail([...at, "optional"], "only a subagent can be optional");
+      optional = undefined;
+    }
+    const routing = optional === undefined && entry.optional !== undefined ? undefined : readRouting(id, entry, optional === true, c, at);
 
     // A missing or invalid mode or budget has been reported, so load() fails and these stand-ins
     // are never used. The agent is still listed, so references to it raise no second problem,
@@ -497,6 +540,8 @@ function readAgents(
     const agent: SourceAgent = { id, mode: mode ?? "primary", description, prompt, budget: budget ?? "", permissions };
     if (steps !== undefined) agent.steps = steps;
     if (color !== undefined) agent.color = color;
+    if (optional === true) agent.optional = true;
+    if (routing !== undefined) agent.routing = routing;
     out.push(agent);
   }
   return out;
@@ -566,6 +611,7 @@ function readManifest(value: unknown, c: Checker, refs: MarkdownRef[]): Manifest
   const marker = c.text(top.marker, ["marker"]) ?? "";
   if (marker !== "" && !marker.startsWith("#")) c.fail(["marker"], 'must start with "#", because it is written as a YAML comment');
   if (/[\r\n]/.test(marker)) c.fail(["marker"], "must be a single line");
+  const helperOff = readLine(top.helperOff, c, ["helperOff"]);
 
   const budgets = readBudgets(top.budgets, c);
   const ruleSets = readRuleSets(top.ruleSets, c);
@@ -580,6 +626,14 @@ function readManifest(value: unknown, c: Checker, refs: MarkdownRef[]): Manifest
     if (skills.length > 0 && !budgets.has("skill")) {
       c.fail(["budgets", "skill"], "required key is missing; every skill body is checked against it");
     }
+    if (agents.some((agent) => agent.optional === true)) {
+      if (!budgets.has("routing")) {
+        c.fail(["budgets", "routing"], "required key is missing; every routing entry of an optional agent is checked against it");
+      }
+      if (!budgets.has("lead-all")) {
+        c.fail(["budgets", "lead-all"], "required key is missing; the default agent's prompt with every routing entry is checked against it");
+      }
+    }
   }
 
   const defaultAgent = c.text(top.defaultAgent, ["defaultAgent"]) ?? "";
@@ -593,7 +647,9 @@ function readManifest(value: unknown, c: Checker, refs: MarkdownRef[]): Manifest
   // Checked against the profile files by load().
   const defaultProfile = c.text(top.defaultProfile, ["defaultProfile"]) ?? "";
 
-  return { name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills };
+  const manifest: Manifest = { name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills };
+  if (helperOff !== undefined) manifest.helperOff = helperOff;
+  return manifest;
 }
 
 // ---------------------------------------------------------------------------------------------

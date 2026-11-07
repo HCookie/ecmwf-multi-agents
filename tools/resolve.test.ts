@@ -12,6 +12,7 @@ import {
   checkBudgets,
   checkReviewPolicy,
   expandPermissions,
+  helperListProblems,
   resolve,
   resolveHarness,
   reviewPolicyProblems,
@@ -92,7 +93,7 @@ function manifest(): Json {
 }
 
 const MARKDOWN: Record<string, string> = {
-  "agents/lead.md": "\n\nYou are lead.\r\n\r\nReview policy: auto\r\n\n",
+  "agents/lead.md": "\n\nYou are lead.\r\n\r\nReview policy: auto\r\n\r\n- scout: looks.\r\n- builder: builds.\r\n\n",
   "agents/scout.md": "  You are scout.  \n",
   "agents/builder.md": "\nYou build.\n",
   "fragments/helper.md": "Helpers never ask.\n",
@@ -219,7 +220,7 @@ describe("agents", () => {
     });
     const harness = resolveHarness(await sourceOf({ manifest: m }));
     expect(harness.agents.map((agent) => agent.prompt)).toEqual([
-      "You are lead.\n\nReview policy: auto",
+      "You are lead.\n\nReview policy: auto\n\n- scout: looks.\n- builder: builds.",
       "You are scout.\n\nHelpers never ask.",
       "You build.\n\nHelpers never ask.",
     ]);
@@ -232,7 +233,7 @@ describe("agents", () => {
     const harness = resolveHarness(
       await sourceOf({ manifest: m, markdown: { "fragments/rules.md": "\r\n  Rule one.\r\nRule two.\r\n" } }),
     );
-    expect(harness.agents[0]?.prompt).toBe("You are lead.\n\nReview policy: auto\n\nRule one.\nRule two.");
+    expect(harness.agents[0]?.prompt).toBe("You are lead.\n\nReview policy: auto\n\n- scout: looks.\n- builder: builds.\n\nRule one.\nRule two.");
   });
 
   test("the default profile is baked in, its effort as the variant; agents it leaves out get no model", async () => {
@@ -297,7 +298,7 @@ describe("budgets", () => {
     expect(approxTokens("😀😀😀😀")).toBe(1);
   });
 
-  // Sizes: lead 34 characters (9 tokens), scout 14 (4), builder 30 (8), zulu 16 (4),
+  // Sizes: lead 70 characters (18 tokens), scout 14 (4), builder 30 (8), zulu 16 (4),
   // alpha 6 (2), skill-b 12 (3), skill-a 3 (1).
   const tight = edited((m) => {
     m.budgets = { lead: 8, helper: 5, command: 3, skill: 2 };
@@ -307,7 +308,7 @@ describe("budgets", () => {
     const source = await sourceOf({ manifest: tight });
     const rows = sizeTable(source, resolveHarness(source));
     expect(rows.map((row) => [row.kind, row.id, row.characters, row.tokens, row.budget, row.limit])).toEqual([
-      ["agent", "lead", 34, 9, "lead", 8],
+      ["agent", "lead", 70, 18, "lead", 8],
       ["agent", "scout", 14, 4, "helper", 5],
       ["agent", "builder", 30, 8, "helper", 5],
       ["command", "zulu", 16, 4, "command", 3],
@@ -322,7 +323,7 @@ describe("budgets", () => {
     const source = await sourceOf({ manifest: tight });
     const harness = resolveHarness(source);
     const expected = [
-      "src/agents/lead.md: agents.lead.prompt: about 9 tokens (34 characters), over the lead budget of 8 tokens by 1",
+      "src/agents/lead.md: agents.lead.prompt: about 18 tokens (70 characters), over the lead budget of 8 tokens by 10",
       "src/agents/builder.md, src/fragments/helper.md: agents.builder.prompt: about 8 tokens (30 characters), over the helper budget of 5 tokens by 3",
       "src/commands/zulu.md: commands.zulu.template: about 4 tokens (16 characters), over the command budget of 3 tokens by 1",
       "src/skills/skill-b/SKILL.md: skills.skill-b.body: about 3 tokens (12 characters), over the skill budget of 2 tokens by 1",
@@ -371,7 +372,7 @@ describe("review policy line", () => {
     ]);
   });
 
-  test("resolve reports budget and review problems together", async () => {
+  test("resolve reports budget, review and helper list problems together", async () => {
     const m = edited((m) => {
       m.budgets.command = 3;
     });
@@ -379,6 +380,83 @@ describe("review policy line", () => {
     expect(problemsOf(() => resolve(source))).toEqual([
       "src/commands/zulu.md: commands.zulu.template: about 4 tokens (16 characters), over the command budget of 3 tokens by 1",
       'src/agents/lead.md: agents.lead.prompt: has no line "Review policy: auto"',
+      'src/agents/lead.md: agents.lead.prompt: has no line "- scout: ..."; the plugin removes that line when scout is switched off',
+      'src/agents/lead.md: agents.lead.prompt: has no line "- builder: ..."; the plugin removes that line when builder is switched off',
+    ]);
+  });
+});
+
+describe("optional helpers", () => {
+  function optional(change: (m: Json) => void = () => {}): Json {
+    return edited((m) => {
+      m.budgets.routing = 20;
+      m.budgets["lead-all"] = 1000;
+      m.helperOff = "Others are off.";
+      m.agents.tester = {
+        mode: "subagent",
+        description: "Tests.",
+        prompt: ["agents/tester.md"],
+        budget: "helper",
+        optional: true,
+        routing: "breaks things.",
+      };
+      change(m);
+    });
+  }
+  const markdown = { "agents/tester.md": "You test.\n" };
+
+  test("keep their flag and routing entry; the harness keeps the line for helpers that are off", async () => {
+    const harness = resolveHarness(await sourceOf({ manifest: optional(), markdown }));
+    expect(harness.agents.find((agent) => agent.id === "tester")).toMatchObject({ optional: true, routing: "breaks things." });
+    expect(harness.agents.find((agent) => agent.id === "scout")).not.toHaveProperty("optional");
+    expect(harness.agents.find((agent) => agent.id === "scout")).not.toHaveProperty("routing");
+    expect(harness.helperOff).toBe("Others are off.");
+    expect(resolveHarness(await sourceOf())).not.toHaveProperty("helperOff");
+  });
+
+  // The routing line "- tester: breaks things." is 24 characters. The largest lead prompt adds
+  // it after the default helpers' lines (25 with its line break) and the line for helpers that
+  // are off (18): 70 + 25 + 18 = 113 characters.
+  test("each routing entry and the largest prompt of the default agent are measured after the agents", async () => {
+    const source = await sourceOf({ manifest: optional(), markdown });
+    const rows = sizeTable(source, resolveHarness(source));
+    expect(rows.slice(4, 6).map((row) => [row.kind, row.id, row.key, row.files, row.characters, row.tokens, row.budget, row.limit])).toEqual([
+      ["routing", "tester", "agents.tester.routing", ["src/manifest.jsonc"], 24, 6, "routing", 20],
+      ["agent", "lead-all", "agents.lead.prompt with every routing entry", ["src/agents/lead.md", "src/manifest.jsonc"], 113, 29, "lead-all", 1000],
+    ]);
+    expect(rows[6]?.kind).toBe("command");
+    expect(sizeTable(await sourceOf(), resolveHarness(await sourceOf())).some((row) => row.kind === "routing" || row.id === "lead-all")).toBe(false);
+  });
+
+  test("routing entries and the largest prompt are held to their budgets", async () => {
+    const source = await sourceOf({
+      manifest: optional((m) => {
+        m.budgets.routing = 5;
+        m.budgets["lead-all"] = 20;
+      }),
+      markdown,
+    });
+    expect(budgetProblems(sizeTable(source, resolveHarness(source)))).toEqual([
+      "src/manifest.jsonc: agents.tester.routing: about 6 tokens (24 characters), over the routing budget of 5 tokens by 1",
+      "src/agents/lead.md, src/manifest.jsonc: agents.lead.prompt with every routing entry: about 29 tokens (113 characters), over the lead-all budget of 20 tokens by 9",
+    ]);
+  });
+
+  test("the default agent lists each default helper once and no optional one", async () => {
+    async function problemsFor(lead: string): Promise<string[]> {
+      const source = await sourceOf({ manifest: optional(), markdown: { ...markdown, "agents/lead.md": lead } });
+      return helperListProblems(source, resolveHarness(source));
+    }
+    const base = "You are lead.\n\nReview policy: auto\n\n";
+    expect(await problemsFor(`${base}- scout: looks.\n- builder: builds.\n`)).toEqual([]);
+    expect(await problemsFor(`${base}- scout: looks.\n`)).toEqual([
+      'src/agents/lead.md: agents.lead.prompt: has no line "- builder: ..."; the plugin removes that line when builder is switched off',
+    ]);
+    expect(await problemsFor(`${base}- scout: looks.\n- builder: builds.\n- scout: again.\n`)).toEqual([
+      'src/agents/lead.md: agents.lead.prompt: has 2 lines "- scout: ..."; it must have exactly one, which the plugin removes when scout is switched off',
+    ]);
+    expect(await problemsFor(`${base}- scout: looks.\n- builder: builds.\n- tester: breaks.\n`)).toEqual([
+      'src/agents/lead.md: agents.lead.prompt: has a line "- tester: ..."; the plugin adds it when tester, an optional agent, is switched on',
     ]);
   });
 });

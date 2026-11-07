@@ -234,7 +234,7 @@ describe("JSONC", () => {
     const manifestText = JSON.stringify(manifest(), null, 2).replace('"name"', '"__proto__": { "x": 1 },\n  "name"');
     const problems = await problemsOf({ manifestText });
     expect(problems).toEqual([
-      "src/manifest.jsonc: __proto__: unknown key; allowed keys are name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands and skills",
+      "src/manifest.jsonc: __proto__: unknown key; allowed keys are name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills and helperOff",
     ]);
   });
 });
@@ -274,8 +274,8 @@ describe("unknown keys", () => {
     });
     const profile = { description: "Default.", agents: { lead: { model: "acme/big-1", variant: "high" } } };
     expect(await problemsOf({ manifest: m, profiles: { default: profile } })).toEqual([
-      "src/manifest.jsonc: version: unknown key; allowed keys are name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands and skills",
-      "src/manifest.jsonc: agents.builder.base: unknown key; allowed keys are mode, description, prompt, budget, steps, color and permissions",
+      "src/manifest.jsonc: version: unknown key; allowed keys are name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills and helperOff",
+      "src/manifest.jsonc: agents.builder.base: unknown key; allowed keys are mode, description, prompt, budget, steps, color, permissions, optional and routing",
       "src/profiles/default.jsonc: agents.lead.variant: unknown key; allowed keys are model and effort",
     ]);
   });
@@ -457,6 +457,77 @@ describe("agents", () => {
       'src/manifest.jsonc: agents.lead.permissions[4]: must be an object, not "deny all"',
       "src/manifest.jsonc: agents.lead.permissions[5].resource: required key is missing",
       "src/manifest.jsonc: agents.scout.permissions: must be a list, not an object",
+    ]);
+  });
+
+  /** The fixture with an optional helper and the budgets and line it needs. */
+  function withOptional(change: (m: Json) => void = () => {}): Json {
+    return edited((m) => {
+      m.budgets.routing = 50;
+      m.budgets["lead-all"] = 1000;
+      m.helperOff = "Helpers not listed here are off: do their work yourself.";
+      m.agents.tester = {
+        mode: "subagent",
+        description: "Tests.",
+        prompt: ["agents/tester.md"],
+        budget: "helper",
+        optional: true,
+        routing: "tries to break a change.",
+      };
+      change(m);
+    });
+  }
+  const TESTER = { "agents/tester.md": "You are tester.\n" };
+
+  test("an optional helper has a one-line routing entry; the line for helpers that are off is read", async () => {
+    const source = await load(await fixture({ manifest: withOptional(), markdown: TESTER }));
+    expect(source.manifest.agents.at(-1)).toEqual({
+      id: "tester",
+      mode: "subagent",
+      description: "Tests.",
+      prompt: ["agents/tester.md"],
+      budget: "helper",
+      optional: true,
+      routing: "tries to break a change.",
+      permissions: [],
+    });
+    expect(source.manifest.agents[1]).not.toHaveProperty("optional");
+    expect(source.manifest.helperOff).toBe("Helpers not listed here are off: do their work yourself.");
+    const plain = await load(await fixture());
+    expect(plain.manifest.helperOff).toBeUndefined();
+  });
+
+  test("only a subagent is optional, and only an optional one has a routing entry", async () => {
+    const m = withOptional((m) => {
+      m.agents.lead.optional = true;
+      m.agents.scout.optional = "yes";
+      m.agents.builder.routing = "builds.";
+      delete m.agents.tester.routing;
+      m.agents.designer = { mode: "subagent", description: "D.", prompt: ["agents/tester.md"], budget: "helper", optional: true, routing: "two\nlines" };
+      m.agents.drawer = { mode: "subagent", description: "D.", prompt: ["agents/tester.md"], budget: "helper", optional: true, routing: "- draws." };
+      m.agents.quiet = { mode: "subagent", description: "Q.", prompt: ["agents/tester.md"], budget: "helper", optional: false, routing: "x." };
+      m.helperOff = "one\ntwo";
+    });
+    expect(await problemsOf({ manifest: m, markdown: TESTER })).toEqual([
+      "src/manifest.jsonc: helperOff: must be a single line",
+      "src/manifest.jsonc: agents.lead.optional: only a subagent can be optional",
+      "src/manifest.jsonc: agents.scout.optional: must be true or false, not \"yes\"",
+      "src/manifest.jsonc: agents.builder.routing: only an optional agent has a routing entry; the default agent's prompt lists the others",
+      "src/manifest.jsonc: agents.tester.routing: required key is missing; the plugin adds this line to the default agent's prompt when tester is on",
+      "src/manifest.jsonc: agents.designer.routing: must be a single line",
+      'src/manifest.jsonc: agents.drawer.routing: must not start with "-"; the plugin writes "- drawer: " before it',
+      "src/manifest.jsonc: agents.quiet.routing: only an optional agent has a routing entry; the default agent's prompt lists the others",
+    ]);
+  });
+
+  test("optional helpers need the routing and lead-all budgets", async () => {
+    const m = withOptional((m) => {
+      delete m.budgets.routing;
+      delete m.budgets["lead-all"];
+    });
+    expect(await problemsOf({ manifest: m, markdown: TESTER })).toEqual([
+      "src/manifest.jsonc: budgets.routing: required key is missing; every routing entry of an optional agent is checked against it",
+      "src/manifest.jsonc: budgets.lead-all: required key is missing; the default agent's prompt with every routing entry is checked against it",
     ]);
   });
 });

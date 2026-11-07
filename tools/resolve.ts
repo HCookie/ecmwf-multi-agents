@@ -6,6 +6,7 @@
 // holds the checks that run on the resolved text: prompt budgets and the review policy line of
 // the default agent.
 
+import { helpersOf, rewriteHelperList } from "../plugin/helper-list.ts";
 import { REVIEW_POLICIES } from "../plugin/types.ts";
 import { MANIFEST_FILE, type PermissionEntry, type RuleSetItem, type Source, type SourceAgent } from "./load.ts";
 import type {
@@ -96,6 +97,8 @@ export function resolveHarness(source: Source): ResolvedHarness {
     if (choice?.model !== undefined) resolved.model = choice.model;
     // opencode calls the reasoning effort the model variant.
     if (choice?.effort !== undefined) resolved.variant = choice.effort;
+    if (agent.optional === true) resolved.optional = true;
+    if (agent.routing !== undefined) resolved.routing = agent.routing;
     return resolved;
   });
 
@@ -117,7 +120,7 @@ export function resolveHarness(source: Source): ResolvedHarness {
     }),
   );
 
-  return {
+  const harness: ResolvedHarness = {
     name: manifest.name,
     version: source.version,
     defaultAgent: manifest.defaultAgent,
@@ -129,13 +132,28 @@ export function resolveHarness(source: Source): ResolvedHarness {
     skills,
     profiles: source.profiles.map((candidate) => orderedProfile(candidate, manifest.agents)),
   };
+  if (manifest.helperOff !== undefined) harness.helperOff = manifest.helperOff;
+  return harness;
+}
+
+/**
+ * The default agent's prompt as long as the plugin can make it: every optional helper's routing
+ * line added, and the line for helpers that are off (the plugin adds that one after removing a
+ * default helper's line, so this is an upper bound).
+ */
+export function largestLeadPrompt(harness: ResolvedHarness): string {
+  const lead = harness.agents.find((agent) => agent.id === harness.defaultAgent);
+  if (lead === undefined) throw new GeneratorError(`${MANIFEST_FILE}: defaultAgent: names no agent`);
+  const helpers = helpersOf(harness);
+  const all = rewriteHelperList(lead.prompt, helpers, new Set(helpers.map((helper) => helper.id)), harness.helperOff, lead.id).prompt ?? lead.prompt;
+  return harness.helperOff === undefined ? all : `${all}\n- ${harness.helperOff}`;
 }
 
 // ---------------------------------------------------------------------------------------------
 // Budgets
 
 export interface SizeRow {
-  kind: "agent" | "command" | "skill";
+  kind: "agent" | "routing" | "command" | "skill";
   id: string;
   /** Manifest key path of the measured text, such as `agents.scout.prompt`. */
   key: string;
@@ -173,6 +191,17 @@ export function sizeTable(source: Source, harness: ResolvedHarness): SizeRow[] {
     if (resolved === undefined) throw new GeneratorError(`agent ${agent.id} was not resolved`);
     const key = formatKeyPath(["agents", agent.id, "prompt"]);
     rows.push(row("agent", agent.id, key, agent.prompt, resolved.prompt, agent.budget));
+  }
+  const optional = manifest.agents.filter((agent) => agent.optional === true);
+  for (const agent of optional) {
+    const key = formatKeyPath(["agents", agent.id, "routing"]);
+    rows.push(row("routing", agent.id, key, [MANIFEST_FILE.slice("src/".length)], `- ${agent.id}: ${agent.routing ?? ""}`, "routing"));
+  }
+  if (optional.length > 0) {
+    const lead = manifest.agents.find((agent) => agent.id === manifest.defaultAgent);
+    if (lead === undefined) throw new GeneratorError(`${MANIFEST_FILE}: defaultAgent: names no agent`);
+    const key = `${formatKeyPath(["agents", lead.id, "prompt"])} with every routing entry`;
+    rows.push(row("agent", `${lead.id}-all`, key, [...lead.prompt, MANIFEST_FILE.slice("src/".length)], largestLeadPrompt(harness), "lead-all"));
   }
   for (const command of manifest.commands) {
     const resolved = harness.commands.find((candidate) => candidate.id === command.id);
@@ -247,10 +276,40 @@ export function checkReviewPolicy(source: Source, harness: ResolvedHarness): voi
 }
 
 // ---------------------------------------------------------------------------------------------
+// Helper list
+
+/**
+ * The default agent's prompt must list each helper that is on by default in exactly one line
+ * `- <id>: ...`, which the plugin removes when the helper is switched off, and no optional
+ * helper, whose line the plugin adds when it is switched on (plugin/helper-list.ts).
+ */
+export function helperListProblems(source: Source, harness: ResolvedHarness): string[] {
+  const id = harness.defaultAgent;
+  const agent = harness.agents.find((candidate) => candidate.id === id);
+  const sourceAgent = source.manifest.agents.find((candidate) => candidate.id === id);
+  if (agent === undefined || sourceAgent === undefined) return [`${MANIFEST_FILE}: defaultAgent: names no agent`];
+  const where = `${sourceAgent.prompt.map((file) => `src/${file}`).join(", ")}: ${formatKeyPath(["agents", id, "prompt"])}`;
+  const lines = agent.prompt.split("\n");
+  const problems: string[] = [];
+  for (const helper of helpersOf(harness)) {
+    const count = lines.filter((line) => line.startsWith(`- ${helper.id}: `)).length;
+    const shown = `"- ${helper.id}: ..."`;
+    if (helper.optional === true) {
+      if (count > 0) problems.push(`${where}: has a line ${shown}; the plugin adds it when ${helper.id}, an optional agent, is switched on`);
+    } else if (count === 0) {
+      problems.push(`${where}: has no line ${shown}; the plugin removes that line when ${helper.id} is switched off`);
+    } else if (count > 1) {
+      problems.push(`${where}: has ${count} lines ${shown}; it must have exactly one, which the plugin removes when ${helper.id} is switched off`);
+    }
+  }
+  return problems;
+}
+
+// ---------------------------------------------------------------------------------------------
 
 /** Run every check on a resolved harness; throws listing all problems together. */
 export function checkHarness(source: Source, harness: ResolvedHarness, rows = sizeTable(source, harness)): void {
-  const problems = [...budgetProblems(rows), ...reviewPolicyProblems(source, harness)];
+  const problems = [...budgetProblems(rows), ...reviewPolicyProblems(source, harness), ...helperListProblems(source, harness)];
   if (problems.length > 0) {
     throw new GeneratorError(`${problems.length} check${problems.length === 1 ? "" : "s"} failed:`, problems);
   }

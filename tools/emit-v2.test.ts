@@ -447,3 +447,25 @@ describe("v2CentralFiles", () => {
     expect(v2CentralFiles(shuffled)).toEqual(files);
   });
 });
+
+describe("optional agents", () => {
+  function withOptional(): ResolvedHarness {
+    const harness = fixture();
+    harness.agents.push({
+      id: "tester",
+      mode: "subagent",
+      description: "Tries to break a change.",
+      prompt: "Tester prompt.",
+      steps: 60,
+      optional: true,
+      routing: "tries to break a change.",
+      permissions: [{ action: "delegate", resource: "*", effect: "deny" }],
+    });
+    return harness;
+  }
+
+  test("get no agent file and no central entry or prompt: only the plugin brings them, when they are on", () => {
+    expect(emitV2(withOptional())).toEqual(emitV2(fixture()));
+    expect(v2CentralFiles(withOptional())).toEqual(v2CentralFiles(fixture()));
+  });
+});

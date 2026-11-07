@@ -176,8 +176,8 @@ describe("guard", () => {
 
   test("the refusal does not depend on the manifest's rules: a helper added without any is refused too", () => {
     const extended = embeddedFixture();
-    extended.agents.push({ id: "tester", mode: "subagent" });
-    for (const tool of Object.values(HELPER_TOOLS)) expect(toolCallBlock(extended, "tester", tool)).toContain("helpers may not use");
+    extended.agents.push({ id: "auditor", mode: "subagent" });
+    for (const tool of Object.values(HELPER_TOOLS)) expect(toolCallBlock(extended, "auditor", tool)).toContain("helpers may not use");
   });
 });
 
@@ -224,7 +224,8 @@ describe("the 2.0.16 session tracker", () => {
 
 describe("shared pieces", () => {
   test("the helper ids are the harness's subagents", () => {
-    expect([...helperIds(harness)]).toEqual(["scout", "builder", "reviewer"]);
+    // Optional ones too: whichever is on is a helper, and the guard does not depend on the settings.
+    expect([...helperIds(harness)]).toEqual(["scout", "builder", "reviewer", "tester"]);
   });
 
   test("the manifest denies exactly the plugin's tool ids to every helper (one source of truth, guarded here)", async () => {

@@ -49,7 +49,7 @@
     },
     "agents": {
       "title": "Per-agent settings",
-      "description": "Model, reasoning effort and step limit for single agents, applied after the profile.",
+      "description": "Helpers switched on or off, and model, reasoning effort and step limit for single agents, applied after the profile.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -86,6 +86,12 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "enabled": {
+              "title": "On or off",
+              "description": "Switch scout on or off, for you or for one project. Default: true. When it is off, lead does its work itself.",
+              "type": "boolean",
+              "default": true
+            },
             "model": {
               "title": "Model",
               "description": "Model for scout, written as provider/model, for example anthropic/claude-sonnet-5-5. No \"#\" and no spaces. Leave it out to use the profile's choice.",
@@ -113,6 +119,12 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "enabled": {
+              "title": "On or off",
+              "description": "Switch builder on or off, for you or for one project. Default: true. When it is off, lead does its work itself.",
+              "type": "boolean",
+              "default": true
+            },
             "model": {
               "title": "Model",
               "description": "Model for builder, written as provider/model, for example anthropic/claude-sonnet-5-5. No \"#\" and no spaces. Leave it out to use the profile's choice.",
@@ -140,6 +152,12 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "enabled": {
+              "title": "On or off",
+              "description": "Switch reviewer on or off, for you or for one project. Default: true. When it is off, lead does its work itself.",
+              "type": "boolean",
+              "default": true
+            },
             "model": {
               "title": "Model",
               "description": "Model for reviewer, written as provider/model, for example github-copilot/gpt-6.1-sol. No \"#\" and no spaces. Leave it out to use the profile's choice.",

@@ -96,6 +96,59 @@ function heldReportsV2(messages) {
 ${request >= 0 ? firstText(messages[request]) : ""}` };
 }
 
+// plugin/helper-list.ts
+function helpersOf(harness) {
+  return harness.agents.filter((agent) => agent.id !== harness.defaultAgent && agent.mode === "subagent");
+}
+function enabledHelpers(harness, settings) {
+  const on = new Set;
+  for (const helper of helpersOf(harness)) {
+    if (settings.agents[helper.id]?.enabled ?? helper.optional !== true)
+      on.add(helper.id);
+  }
+  return on;
+}
+var line = (id, text) => `- ${id}: ${text}`;
+var bare = (text) => text.endsWith("\r") ? text.slice(0, -1) : text;
+function rewriteHelperList(prompt, helpers, on, helperOff, agent) {
+  const added = new Set(helpers.filter((helper) => helper.optional === true && helper.routing !== undefined).map((helper) => line(helper.id, helper.routing)));
+  if (helperOff !== undefined)
+    added.add(`- ${helperOff}`);
+  const defaults = helpers.filter((helper) => helper.optional !== true);
+  const lines = prompt.split(`
+`);
+  const isDefault = (text) => defaults.some((helper) => bare(text).startsWith(`- ${helper.id}: `));
+  for (const helper of defaults.filter((item) => on.has(item.id))) {
+    const count = lines.filter((text) => bare(text).startsWith(`- ${helper.id}: `)).length;
+    if (count !== 1) {
+      const shown = count === 0 ? "no line" : `${count} lines`;
+      return { problem: `the prompt of ${agent} has ${shown} "- ${helper.id}: ..."; its helper list was left as it is, so it may name helpers that are off and miss ones that are on` };
+    }
+  }
+  let anchor = -1;
+  lines.forEach((text, index) => {
+    if (isDefault(text) || added.has(bare(text)))
+      anchor = index;
+  });
+  if (anchor === -1) {
+    return defaults.length === 0 ? { prompt } : { problem: `the prompt of ${agent} has no helper list; it was left as it is, so it may name helpers that are off and miss ones that are on` };
+  }
+  const ending = lines[anchor].endsWith("\r") ? "\r" : "";
+  const insert = helpers.filter((helper) => helper.optional === true && helper.routing !== undefined && on.has(helper.id)).map((helper) => line(helper.id, helper.routing) + ending);
+  if (helperOff !== undefined && defaults.some((helper) => !on.has(helper.id)))
+    insert.push(`- ${helperOff}${ending}`);
+  const off = defaults.filter((helper) => !on.has(helper.id)).map((helper) => `- ${helper.id}: `);
+  const out = [];
+  lines.forEach((text, index) => {
+    if (!added.has(bare(text)) && !off.some((start) => bare(text).startsWith(start)))
+      out.push(text);
+    if (index === anchor)
+      out.push(...insert);
+  });
+  return { prompt: out.join(`
+`) };
+}
+
 // plugin/apply.ts
 function planAgents(harness, settings) {
   const profile = harness.profiles.find((item) => item.id === settings.profile);
@@ -156,11 +209,32 @@ function modelRef(model, effort) {
     ref.variant = effort;
   return ref;
 }
+function reviewerId(harness) {
+  return harness.commands.find((command) => command.name === "review")?.agent ?? "reviewer";
+}
+function effectiveReview(harness, settings, on = enabledHelpers(harness, settings)) {
+  const reviewer = reviewerId(harness);
+  return helpersOf(harness).some((helper) => helper.id === reviewer) && !on.has(reviewer) ? "never" : settings.review;
+}
+function helpersSwitched(harness, on) {
+  return helpersOf(harness).some((helper) => on.has(helper.id) === (helper.optional === true));
+}
 function applyToV2Agents(editor, harness, settings, plans) {
   const problems = [];
   const changes = [];
+  const helpers = helpersOf(harness);
+  const on = enabledHelpers(harness, settings);
+  const off = new Set(helpers.filter((helper) => !on.has(helper.id)).map((helper) => helper.id));
+  for (const helper of helpers) {
+    if (helper.optional === true || !off.has(helper.id) || editor.get(helper.id) === undefined)
+      continue;
+    if (typeof editor.remove === "function")
+      changes.push(() => editor.remove(helper.id));
+    else
+      problems.push({ message: `${harness.name}: this opencode cannot remove agents, so ${helper.id} stays although it is switched off`, notify: true });
+  }
   for (const plan of plans) {
-    if (editor.get(plan.id) === undefined)
+    if (off.has(plan.id) || editor.get(plan.id) === undefined)
       continue;
     const model = plan.model === undefined ? undefined : modelRef(plan.model, plan.effort);
     changes.push(() => editor.update(plan.id, (agent) => {
@@ -172,18 +246,31 @@ function applyToV2Agents(editor, harness, settings, plans) {
         agent.steps = plan.steps;
     }));
   }
+  const review = effectiveReview(harness, settings, on);
+  if (review !== settings.review && settings.reviewSet) {
+    problems.push({ message: `${harness.name}: the review policy "${settings.review}" needs the reviewer, which is switched off, so nothing is reviewed`, notify: true });
+  }
   const lead = editor.get(harness.defaultAgent);
   if (lead !== undefined) {
     if (typeof lead.system === "string") {
-      const result = rewriteReviewLine(lead.system, settings.review, harness.defaultAgent);
+      const result = rewriteReviewLine(lead.system, review, harness.defaultAgent);
       if (result.problem !== undefined)
         problems.push(reviewProblem(harness, settings, result.problem));
       const slots = rewriteHelperSlotsLine(result.prompt ?? lead.system, settings.maxHelperSlots, harness.defaultAgent);
       if (slots.problem !== undefined)
         problems.push({ message: `${harness.name}: ${slots.problem}`, notify: settings.maxHelperSlotsSet });
-      const prompt = slots.prompt ?? result.prompt;
-      if (prompt !== undefined)
-        changes.push(() => editor.update(harness.defaultAgent, (agent) => agent.system = prompt));
+      let prompt = slots.prompt ?? result.prompt;
+      if (helpersSwitched(harness, on)) {
+        const list = rewriteHelperList(prompt ?? lead.system, helpers, on, harness.helperOff, harness.defaultAgent);
+        if (list.problem !== undefined)
+          problems.push({ message: `${harness.name}: ${list.problem}`, notify: true });
+        else
+          prompt = list.prompt;
+      }
+      if (prompt !== undefined) {
+        const system = prompt;
+        changes.push(() => editor.update(harness.defaultAgent, (agent) => agent.system = system));
+      }
     } else {
       problems.push(reviewProblem(harness, settings, `${harness.defaultAgent} has no prompt, so the review policy was not applied`));
       problems.push({ message: `${harness.name}: ${harness.defaultAgent} has no prompt, so max_helper_slots was not applied`, notify: settings.maxHelperSlotsSet });
@@ -833,10 +920,13 @@ function commandDefinition(ctx, harness, command, options) {
 }
 async function registerHarness(ctx, harness, options) {
   const { reporter } = options;
+  const on = options.helpers ?? enabledHelpers(harness, { agents: {} });
+  const helpers = new Set(helpersOf(harness).map((helper) => helper.id));
+  const agents = harness.agents.filter((agent) => !helpers.has(agent.id) || on.has(agent.id));
   try {
     await ctx.agent.transform((editor) => {
       try {
-        for (const embedded of harness.agents)
+        for (const embedded of agents)
           editor.update(embedded.id, (agent) => applyAgent(agent, embedded, options.home));
         if (options.defaultAgent)
           editor.default(harness.defaultAgent);
@@ -989,6 +1079,10 @@ function isModel(value) {
   return typeof model?.id === "string" && typeof model.providerID === "string";
 }
 var sameModel = (a, b) => a?.id === b?.id && a?.providerID === b?.providerID && a?.variant === b?.variant;
+function reviewerOffText(harness) {
+  const reviewer = reviewerId(harness);
+  return `The ${reviewer} is switched off here, so /review cannot run and nothing is reviewed. ` + `To switch it on, set "agents": { "${reviewer}": { "enabled": true } } in .opencode/${harness.name}.jsonc for this project, ` + `or in ${harness.name}.jsonc in your opencode config folder for every project, then restart opencode.`;
+}
 
 class Inline {
   deps;
@@ -1003,18 +1097,42 @@ class Inline {
     return [session?.get, session?.prompt, session?.switchAgent, session?.wait].every((call) => typeof call === "function");
   }
   commands() {
-    return inlineCommands(this.deps.harness, this.deps.helpers).map((command) => ({
+    const inline = this.available();
+    return inlineCommands(this.deps.harness, this.deps.helpers).flatMap((command) => {
+      if (this.deps.enabled !== undefined && !this.deps.enabled.has(command.agent))
+        return [this.withoutHelper(command)];
+      if (!inline)
+        return [];
+      return [
+        {
+          name: command.name,
+          ...command.description === undefined ? {} : { description: command.description },
+          execute: async (invocation) => {
+            const sessionID = invocation?.sessionID;
+            if (typeof sessionID !== "string")
+              return;
+            const previous = this.chains.get(sessionID) ?? Promise.resolve();
+            const next = previous.then(() => this.run(command, invocation)).catch((error) => this.deps.reporter.internal(`the /${command.name} command`, error));
+            remember(this.chains, sessionID, next);
+          }
+        }
+      ];
+    });
+  }
+  withoutHelper(command) {
+    const { harness, ctx, reporter } = this.deps;
+    if (command.agent !== reviewerId(harness)) {
+      return commandDefinition(ctx, harness, { ...command, agent: harness.defaultAgent, subagent: false }, { reporter });
+    }
+    return {
       name: command.name,
       ...command.description === undefined ? {} : { description: command.description },
       execute: async (invocation) => {
-        const sessionID = invocation?.sessionID;
-        if (typeof sessionID !== "string")
+        if (typeof invocation?.sessionID !== "string")
           return;
-        const previous = this.chains.get(sessionID) ?? Promise.resolve();
-        const next = previous.then(() => this.run(command, invocation)).catch((error) => this.deps.reporter.internal(`the /${command.name} command`, error));
-        remember(this.chains, sessionID, next);
+        await ctx.session?.synthetic?.({ sessionID: invocation.sessionID, text: reviewerOffText(harness), description: `The ${command.agent} is off`, resume: false });
       }
-    }));
+    };
   }
   async modelOf(agent) {
     try {
@@ -1557,8 +1675,11 @@ function leadChanges(lead, harness, settings, home) {
   const expected = { id: embedded.id, mode: "primary", hidden: false, permissions: [] };
   applyAgent(expected, embedded, home);
   if (typeof expected.system === "string") {
-    expected.system = rewriteReviewLine(expected.system, settings.review, embedded.id).prompt ?? expected.system;
+    const on = enabledHelpers(harness, settings);
+    expected.system = rewriteReviewLine(expected.system, effectiveReview(harness, settings, on), embedded.id).prompt ?? expected.system;
     expected.system = rewriteHelperSlotsLine(expected.system, settings.maxHelperSlots, embedded.id).prompt ?? expected.system;
+    if (helpersSwitched(harness, on))
+      expected.system = rewriteHelperList(expected.system, helpersOf(harness), on, harness.helperOff, embedded.id).prompt ?? expected.system;
   }
   const plan = planAgents(harness, settings).plans.find((item) => item.id === embedded.id);
   const model = plan?.model === undefined ? undefined : modelRef(plan.model, plan.effort);
@@ -1606,6 +1727,9 @@ async function doctorReport(input) {
   }) ?? [];
   const { settings } = loaded;
   const changed = lead === undefined ? [] : leadChanges(lead, harness, settings, input.environment.home);
+  const helpers = helpersOf(harness);
+  const on = enabledHelpers(harness, settings);
+  const loadedIds = new Set(agents.map((agent) => agent.id));
   return {
     name: harness.name,
     version: harness.version,
@@ -1628,6 +1752,14 @@ async function doctorReport(input) {
     },
     settingsFiles: loaded.applied,
     settingsSources: loaded.sources,
+    helpersOn: helpers.filter((helper) => on.has(helper.id)).map((helper) => helper.id),
+    helpersOff: helpers.filter((helper) => !on.has(helper.id)).map((helper) => helper.id),
+    helperSwitches: helpers.flatMap((helper) => {
+      const from = loaded.sources[`agents.${helper.id}.enabled`];
+      return from === undefined ? [] : [`${helper.id} ${on.has(helper.id) ? "on" : "off"} in ${from}`];
+    }),
+    helpersMissing: helpers.filter((helper) => on.has(helper.id) && !loadedIds.has(helper.id)).map((helper) => helper.id),
+    helpersStray: helpers.filter((helper) => helper.optional !== true && !on.has(helper.id) && loadedIds.has(helper.id)).map((helper) => helper.id),
     problems: input.problems.list(),
     plugins: (Array.isArray(plugins) ? plugins : []).filter((plugin) => !plugin.id?.startsWith("opencode.") || plugin.state?.status !== "active").map((plugin) => ({
       id: plugin.id ?? null,
@@ -1664,7 +1796,7 @@ var DEFAULT_MAX_HELPER_SLOTS = 4;
 var MODEL_PATTERN = /^[^/#\s]+\/[^#\s]+$/;
 var EFFORT_PATTERN = /^[^#\s]+$/;
 var TOP_KEYS = ["$schema", "review", "profile", "default_agent", "max_helper_slots", "agents"];
-var AGENT_KEYS = ["model", "effort", "steps"];
+var AGENT_KEYS = ["enabled", "model", "effort", "steps"];
 var RENAMED_AGENT_KEYS = { variant: "effort" };
 function listWords(words, last = "or") {
   if (words.length <= 1)
@@ -1750,7 +1882,7 @@ function validateSettings(value, harness) {
             problems.push(`"agents.${id}" must be an object with ${listWords(AGENT_KEYS)}, not ${shown(entry)}`);
             continue;
           }
-          agents[id] = validateAgent(id, entry, problems);
+          agents[id] = validateAgent(id, entry, problems, id === harness.defaultAgent);
         }
         settings.agents = agents;
         break;
@@ -1767,12 +1899,20 @@ function validateSettings(value, harness) {
   }
   return problems.length > 0 ? { problems } : { settings, problems };
 }
-function validateAgent(id, entry, problems) {
+function validateAgent(id, entry, problems, isDefaultAgent) {
   const out = {};
   for (const key of Object.keys(entry)) {
     const item = entry[key];
     const name = `"agents.${id}.${key}"`;
     switch (key) {
+      case "enabled":
+        if (isDefaultAgent)
+          problems.push(`${name} cannot be set: ${id} is always on`);
+        else if (typeof item === "boolean")
+          out.enabled = item;
+        else
+          problems.push(`${name} must be true or false, not ${shown(item)}`);
+        break;
       case "model":
         if (typeof item === "string" && MODEL_PATTERN.test(item))
           out.model = item;
@@ -2162,7 +2302,8 @@ function createSetup(harness, options = {}) {
         ruleOrder,
         pluginDir: options.pluginDir ?? moduleDir(),
         defaultAgent: settings.defaultAgent,
-        reporter
+        reporter,
+        helpers: enabledHelpers(harness, settings)
       });
       if (environment !== undefined) {
         try {
@@ -2223,6 +2364,7 @@ function createSetup(harness, options = {}) {
         ctx,
         tracker,
         helpers,
+        enabled: enabledHelpers(harness, settings),
         reporter,
         plannedModel: (agent) => {
           const plan = plans.find((item) => item.id === agent);
@@ -2269,7 +2411,7 @@ ${found.reply}`;
         }
       }, reporter, "agent");
       const commandTransform = ctx.command?.transform;
-      const lateCommands = typeof commandTransform === "function" && inline.available() && inlineCommands(harness, helpers).length > 0 ? new LateTransform((callback) => commandTransform.call(ctx.command, callback), (editor) => {
+      const lateCommands = typeof commandTransform === "function" && inline.commands().length > 0 ? new LateTransform((callback) => commandTransform.call(ctx.command, callback), (editor) => {
         try {
           for (const command of inline.commands())
             editor.add(command);

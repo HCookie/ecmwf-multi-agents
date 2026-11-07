@@ -3,7 +3,8 @@
 
 // Registers the harness itself: the agents, skills and commands the generated files define, and
 // lead as the default agent, so a project's `plugins` line or the npm package brings the whole
-// harness without any file (docs/research/opencode-v2.md, section 12).
+// harness without any file (docs/research/opencode-v2.md, section 12). Of the helpers, only those
+// the settings leave on are registered; the optional ones have no file at all (ADR 0005).
 //
 // Everything here mirrors what opencode's own loaders do with the generated files, so the result
 // is the same whichever way the harness arrives: agent files (core/src/config/plugin/agent.ts:
@@ -15,6 +16,7 @@
 // agents field by field, and a command or skill file replaces the one registered here.
 
 import path from "node:path";
+import { enabledHelpers, helpersOf } from "./helper-list.ts";
 import type { Reporter } from "./report.ts";
 import type { RuleOrder } from "./rule-order.ts";
 import type {
@@ -222,16 +224,24 @@ export interface RegisterOptions {
   reporter: Reporter;
   /** Adds the probe that keeps the agents' own rules after the config's (rule-order.ts). */
   ruleOrder?: RuleOrder;
+  /** The helpers that are on; by default those that are not optional. */
+  helpers?: ReadonlySet<string>;
 }
 
-/** Register agents, the default agent, skills and commands. Each part fails on its own. */
+/**
+ * Register lead, the helpers that are on, the default agent, skills and commands. Each part fails
+ * on its own. An optional helper has no file, so this is the only way it arrives.
+ */
 export async function registerHarness(ctx: V2Context, harness: EmbeddedHarness, options: RegisterOptions): Promise<void> {
   const { reporter } = options;
+  const on = options.helpers ?? enabledHelpers(harness, { agents: {} });
+  const helpers = new Set(helpersOf(harness).map((helper) => helper.id));
+  const agents = harness.agents.filter((agent) => !helpers.has(agent.id) || on.has(agent.id));
   try {
     await ctx.agent.transform((editor) => {
       // Runs on every rebuild; opencode disables a plugin whose transform throws.
       try {
-        for (const embedded of harness.agents) editor.update(embedded.id, (agent) => applyAgent(agent, embedded, options.home));
+        for (const embedded of agents) editor.update(embedded.id, (agent) => applyAgent(agent, embedded, options.home));
         if (options.defaultAgent) editor.default(harness.defaultAgent);
         options.ruleOrder?.addProbe(editor);
       } catch (error) {

@@ -49,6 +49,11 @@ const GOOD_DOCTOR = {
     settings: { review: "auto", profile: "default", default_agent: true, max_helper_slots: 4, agents: {} },
     settingsFiles: [],
     settingsSources: {},
+    helpersOn: ["scout", "builder", "reviewer"],
+    helpersOff: ["researcher", "tester", "designer", "data-scientist"],
+    helperSwitches: [],
+    helpersMissing: [],
+    helpersStray: [],
     problems: [],
     plugins: [{ id: NAME, status: "active" }],
   },
@@ -587,6 +592,8 @@ describe("doctor", () => {
     expect(out).toContain("OK    lead is the harness's, with the plugin 9.9.9 active");
     expect(out).toContain("OK    lead's Review policy: auto");
     expect(out).toContain("OK    max_helper_slots 4; lead's instruction: Run at most 4 helpers at once.");
+    expect(out).toContain("OK    helpers on: scout, builder, reviewer; off: researcher, tester, designer, data-scientist");
+    expect(out).not.toContain("switched in the settings");
     expect(out).toContain("OK    lead is the default agent");
   });
 
@@ -747,6 +754,29 @@ describe("doctor asks opencode through the plugin's RPC", () => {
     expect(missing.out).toContain("FAIL  opencode has no lead in");
     expect(missing.out).toContain("WARN  lead's prompt has no \"Review policy:\" line");
     expect(missing.out).toContain("WARN  lead's prompt has no single helper limit instruction; max_helper_slots 4 may not apply");
+  });
+
+  test("helpers switched in the settings, and helpers opencode did not follow", () => {
+    const box = makeBox();
+    run(box, []);
+    answer(box, {
+      output: {
+        ...GOOD_DOCTOR.output,
+        helpersOn: ["scout", "reviewer", "tester"],
+        helpersOff: ["builder", "researcher", "designer", "data-scientist"],
+        helperSwitches: ["builder off in /p/.opencode/ecmwf-multi-agents.jsonc", "tester on in /h/ecmwf-multi-agents.jsonc"],
+        helpersMissing: ["tester"],
+        helpersStray: ["builder"],
+      },
+    });
+    const { code, out } = run(box, ["doctor"]);
+    expect(code).toBe(0);
+    expect(out).toContain("OK    helpers on: scout, reviewer, tester; off: builder, researcher, designer, data-scientist");
+    expect(out).toContain("OK    switched in the settings: builder off in /p/.opencode/ecmwf-multi-agents.jsonc, tester on in /h/ecmwf-multi-agents.jsonc");
+    expect(out).toContain("WARN  switched on, but opencode did not load: tester; an opencode config or another plugin may remove it");
+    expect(out).toContain("WARN  switched off, but opencode still has: builder; this opencode may not let the plugin remove agents");
+    answer(box, { output: { ...GOOD_DOCTOR.output, helpersOn: [], helpersOff: ["scout", "builder", "reviewer", "researcher", "tester", "designer", "data-scientist"] } });
+    expect(run(box, ["doctor"]).out).toContain("OK    helpers on: none; off: scout, builder, reviewer, researcher, tester, designer, data-scientist");
   });
 
   test("a global install masks a project's plugins line: a warning", () => {

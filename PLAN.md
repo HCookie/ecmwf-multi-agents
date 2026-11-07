@@ -736,16 +736,21 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
 - [x] Tiago: ADR 0005 and `docs/architecture.md`: optional and switchable helpers (roles,
   permissions, routing, settings, profiles, work files). The optional helpers come only from
   the plugin (no generated file, no central entry), registered only when on
-- [ ] Tiago: Settings `agents.<id>.enabled` (boolean; refused for `lead`), merge, sources,
+- [x] Tiago: Settings `agents.<id>.enabled` (boolean; refused for `lead`), merge, sources,
   schema
-- [ ] Tiago: Manifest and generator: optional agents, one routing line per helper, files for
-  agents that are off by default, a budget for `lead` with every helper on, the embedded data
-- [ ] Tiago: Plugin applies the enabled set: helpers that are off removed and denied to
+- [x] Tiago: Manifest and generator: optional agents, one routing line per helper, files for
+  agents that are off by default, a budget for `lead` with every helper on, the embedded data.
+  Optional agents get no file and no central entry; `lead`'s prompt must list each default
+  helper as `- <id>: ...`, checked by the generator; budgets `routing` and `lead-all`
+- [x] Tiago: Plugin applies the enabled set: helpers that are off removed and denied to
   `lead`, `lead`'s helper list rewritten, review policy `never` when the reviewer is off,
-  helper tools and `doctor`'s comparison cover every helper
-- [ ] Tiago: Commands with a helper off: `/progress` on `lead`, `/review` explains, `/onboard`
-  and the plan skill name any helper that is on
-- [ ] Tiago: `doctor` and the installer report each helper on or off and the file that chose it
+  helper tools and `doctor`'s comparison cover every helper. Registration brings only the
+  helpers that are on; a default helper that is off is removed by the late transform; a
+  user's own agent with an optional helper's name is left alone (`plugin/helper-list.ts`)
+- [x] Tiago: Commands with a helper off: `/progress` on `lead`, `/review` explains with a
+  notice and no model turn. `/onboard` and the plan skill wording go with the skills task
+- [x] Tiago: `doctor` and the installer report each helper on or off and the file that chose
+  it, and helpers opencode did not follow
 - [ ] Tiago: The four agents: prompts, permissions, profiles, routing lines; `lead` asks before
   `gh issue create`
 - [ ] Tiago: Guide and plan skills, README, install guide, changelog

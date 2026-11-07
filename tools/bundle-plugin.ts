@@ -94,6 +94,9 @@ export function embedFiles(harness: ResolvedHarness): Pick<EmbeddedHarness, "age
     if (permissions !== undefined) out.permissions = permissions;
     // opencode trims an agent file's body into the system prompt.
     out.system = body(v2AgentFile(agent, harness.marker).content).trim();
+    // Optional helpers have no file; the plugin registers them when they are on.
+    if (agent.optional === true) out.optional = true;
+    if (agent.routing !== undefined) out.routing = agent.routing;
     return out;
   });
   const commands = harness.commands.map((command): EmbeddedCommand => {
@@ -168,6 +171,7 @@ export function embedHarness(harness: ResolvedHarness): EmbeddedHarness {
     defaultProfile: harness.defaultProfile,
     profiles,
     ...embedFiles(harness),
+    ...(harness.helperOff === undefined ? {} : { helperOff: harness.helperOff }),
   };
 }
 

@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { INLINE_USER_AND_REPORTS_WAKE_TEXT, INLINE_USER_WAKE_TEXT, INLINE_WAKE_TEXT, V2_CONTINUE_NOTES, WAKE_TEXT, heldReportsV2, stepsV2 } from "./answer-first.ts";
 import { helperIds } from "./helpers.ts";
-import { BEFORE_BRIEF_FOR_TESTS, HELD_NOTE, INLINE_MARK, Inline, InlineRuns, briefIndex, classifyHelperRequest, inlineCommands, isUserMessage, isolateHelperRequest, type InlineRun } from "./inline.ts";
+import { BEFORE_BRIEF_FOR_TESTS, HELD_NOTE, INLINE_MARK, Inline, InlineRuns, briefIndex, classifyHelperRequest, inlineCommands, isUserMessage, isolateHelperRequest, reviewerOffText, type InlineRun } from "./inline.ts";
 import type { Reporter } from "./report.ts";
 import { embeddedFixture } from "./testing.ts";
 import { SessionTracker } from "./tools-v2.ts";
@@ -209,7 +209,7 @@ class FakeSessions {
   model: V2ModelRef | undefined = { id: "m1", providerID: "mock" };
   parents: Record<string, string | undefined> = {};
   prompts: Array<Record<string, unknown>> = [];
-  synthetics: Array<{ sessionID: string; text: string; description?: string; delivery?: string }> = [];
+  synthetics: Array<{ sessionID: string; text: string; description?: string; delivery?: string; resume?: boolean }> = [];
   /** Each `wait` call waits for the next `release()`. */
   private waiting: Array<() => void> = [];
   autoRelease = true;
@@ -525,5 +525,45 @@ describe("Inline", () => {
     const sessions = new FakeSessions();
     delete (sessions.ctx.session as { wait?: unknown }).wait;
     expect(makeInline(sessions).inline.available()).toBe(false);
+  });
+});
+
+describe("Inline with a helper switched off", () => {
+  function makeOff(enabled: string[], sessions = new FakeSessions()) {
+    const inline = new Inline({ harness, ctx: sessions.ctx, tracker: new SessionTracker(), helpers, enabled: new Set(enabled), reporter: quiet, plannedModel: () => undefined });
+    const command = (name: string) => inline.commands().find((item) => item.name === name)!;
+    return { sessions, inline, command };
+  }
+
+  test("/progress runs on lead, in the user's session, when scout is off", async () => {
+    const { sessions, command } = makeOff(["builder", "reviewer"]);
+    await command("progress").execute({ sessionID: "s", prompt: { text: "export" } });
+    await settle();
+    expect(sessions.calls).toEqual(["prompt"]);
+    expect(sessions.prompts).toEqual([{ text: "Progress of export", sessionID: "s" }]);
+    // From another agent, the session goes to lead first.
+    const other = makeOff(["builder", "reviewer"]);
+    other.sessions.agent = "build";
+    await other.command("progress").execute({ sessionID: "s", prompt: { text: "" } });
+    await settle();
+    expect(other.sessions.calls).toEqual(["agent:lead", "prompt"]);
+  });
+
+  test("/review says the reviewer is off and how to switch it on, with no model turn", async () => {
+    const { sessions, command } = makeOff(["scout", "builder"]);
+    await command("review").execute({ sessionID: "s", prompt: { text: "main" } });
+    await settle();
+    expect(sessions.prompts).toEqual([]);
+    expect(sessions.synthetics).toEqual([{ sessionID: "s", text: reviewerOffText(harness), description: "The reviewer is off", resume: false }]);
+    expect(reviewerOffText(harness)).toBe(
+      'The reviewer is switched off here, so /review cannot run and nothing is reviewed. To switch it on, set "agents": { "reviewer": { "enabled": true } } in .opencode/ecmwf-multi-agents.jsonc for this project, or in ecmwf-multi-agents.jsonc in your opencode config folder for every project, then restart opencode.',
+    );
+  });
+
+  test("a helper's command still has its fallback when commands cannot run inline", () => {
+    const sessions = new FakeSessions();
+    delete (sessions.ctx.session as { wait?: unknown }).wait;
+    expect(makeOff(["builder", "reviewer"], sessions).inline.commands().map((item) => item.name)).toEqual(["progress"]);
+    expect(makeOff(["scout", "builder", "reviewer"], sessions).inline.commands()).toEqual([]);
   });
 });

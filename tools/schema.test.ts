@@ -25,6 +25,7 @@ const harness: ResolvedHarness = {
       variant: "high",
     },
     { id: "scout", mode: "subagent", description: "Looks.", prompt: "You are scout.", steps: 15, permissions: [] },
+    { id: "tester", mode: "subagent", description: "Breaks.", prompt: "You are tester.", steps: 60, permissions: [], optional: true, routing: "breaks things." },
   ],
   commands: [],
   skills: [],
@@ -108,6 +109,7 @@ const GOOD: unknown[] = [
   { agents: { lead: { effort: "none" } } },
   { agents: { scout: { model: "My-Proxy/qwen:27b" } } },
   { agents: {} },
+  { agents: { scout: { enabled: false }, tester: { enabled: true, effort: "low" } } },
 ];
 
 const BAD: [unknown, string][] = [
@@ -137,6 +139,10 @@ const BAD: [unknown, string][] = [
   [{ agents: { lead: { model: "acme/big", variant: "high" } } }, "$.agents.lead.variant: additionalProperties"],
   [{ agents: { scout: { steps: 0 } } }, "$.agents.scout.steps: minimum"],
   [{ agents: { scout: { steps: 1.5 } } }, "$.agents.scout.steps: type"],
+  [{ agents: { scout: { enabled: "yes" } } }, "$.agents.scout.enabled: type"],
+  [{ agents: { tester: { enabled: 1 } } }, "$.agents.tester.enabled: type"],
+  // lead is always on.
+  [{ agents: { lead: { enabled: true } } }, "$.agents.lead.enabled: additionalProperties"],
   [[], "$: type"],
   ["auto", "$: type"],
 ];
@@ -180,7 +186,7 @@ describe("settings schema", () => {
       }
     };
     walk(schema, "$");
-    expect(objects).toEqual(["$", "$.agents", "$.agents.lead", "$.agents.scout"]);
+    expect(objects).toEqual(["$", "$.agents", "$.agents.lead", "$.agents.scout", "$.agents.tester"]);
   });
 
   test("lists the settings, policies, profiles and agents", () => {
@@ -190,12 +196,16 @@ describe("settings schema", () => {
     expect(sub(schema, "properties", "profile").enum).toEqual(["default", "inherit"]);
     expect(sub(schema, "properties", "default_agent").type).toBe("boolean");
     expect(sub(schema, "properties", "max_helper_slots")).toMatchObject({ type: "integer", minimum: 1, default: 4 });
-    expect(Object.keys(sub(schema, "properties", "agents", "properties"))).toEqual(["lead", "scout"]);
+    expect(Object.keys(sub(schema, "properties", "agents", "properties"))).toEqual(["lead", "scout", "tester"]);
     expect(Object.keys(sub(schema, "properties", "agents", "properties", "scout", "properties"))).toEqual([
+      "enabled",
       "model",
       "effort",
       "steps",
     ]);
+    expect(Object.keys(sub(schema, "properties", "agents", "properties", "lead", "properties"))).toEqual(["model", "effort", "steps"]);
+    expect(sub(schema, "properties", "agents", "properties", "scout", "properties", "enabled")).toMatchObject({ type: "boolean", default: true });
+    expect(sub(schema, "properties", "agents", "properties", "tester", "properties", "enabled")).toMatchObject({ type: "boolean", default: false });
     expect(sub(schema, "properties", "agents", "properties", "scout", "properties", "steps")).toMatchObject({
       type: "integer",
       minimum: 1,
@@ -213,6 +223,12 @@ describe("settings schema", () => {
     expect(String(sub(properties, "default_agent").description)).toContain("Default: true.");
     const scout = sub(properties, "agents", "properties", "scout");
     expect(String(sub(scout, "properties", "steps").description)).toContain("Default: 15.");
+    expect(String(sub(scout, "properties", "enabled").description)).toBe(
+      "Switch scout on or off, for you or for one project. Default: true. When it is off, lead does its work itself.",
+    );
+    expect(String(sub(properties, "agents", "properties", "tester", "properties", "enabled").description)).toBe(
+      "Switch tester on or off, for you or for one project. Default: false: tester is an optional helper, on only where a settings file switches it on.",
+    );
     expect(String(sub(properties, "agents", "properties", "lead", "properties", "model").description)).toContain(
       "for example acme/big",
     );

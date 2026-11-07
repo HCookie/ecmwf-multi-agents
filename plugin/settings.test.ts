@@ -125,12 +125,25 @@ describe("validateSettings", () => {
   test("agents is an object keyed by known agents, each an object", () => {
     expect(problemsOf({ agents: [] })).toEqual(['"agents" must be an object that maps agent names to settings, not []']);
     expect(problemsOf({ agents: { build: {} } })).toEqual([
-      '"agents" names "build", which is not one of the agents lead, scout, builder and reviewer',
+      '"agents" names "build", which is not one of the agents lead, scout, builder, reviewer and tester',
     ]);
     expect(problemsOf({ agents: { "scout-deep": {} } })).toEqual([
-      '"agents" names "scout-deep", which is not one of the agents lead, scout, builder and reviewer',
+      '"agents" names "scout-deep", which is not one of the agents lead, scout, builder, reviewer and tester',
     ]);
-    expect(problemsOf({ agents: { scout: "fast" } })).toEqual(['"agents.scout" must be an object with model, effort or steps, not "fast"']);
+    expect(problemsOf({ agents: { scout: "fast" } })).toEqual(['"agents.scout" must be an object with enabled, model, effort or steps, not "fast"']);
+  });
+
+  test("enabled switches a helper on or off; lead is always on", () => {
+    expect(validateSettings({ agents: { tester: { enabled: true }, builder: { enabled: false, steps: 9 } } }, harness)).toEqual({
+      settings: { agents: { tester: { enabled: true }, builder: { enabled: false, steps: 9 } } },
+      problems: [],
+    });
+    for (const enabled of ["yes", 1, null, []]) {
+      expect(problemsOf({ agents: { scout: { enabled } } })).toEqual([`"agents.scout.enabled" must be true or false, not ${JSON.stringify(enabled)}`]);
+    }
+    for (const enabled of [true, false]) {
+      expect(problemsOf({ agents: { lead: { enabled } } })).toEqual(['"agents.lead.enabled" cannot be set: lead is always on']);
+    }
   });
 
   test("model is provider/model without '#' or spaces", () => {
@@ -174,7 +187,7 @@ describe("validateSettings", () => {
   test("no other keys, at the top or in an agent", () => {
     expect(problemsOf({ reviews: "auto" })).toEqual(['unknown setting "reviews"; the settings are $schema, review, profile, default_agent, max_helper_slots and agents']);
     expect(problemsOf({ agents: { scout: { temperature: 0.2 } } })).toEqual([
-      '"agents.scout" has the unknown setting "temperature"; an agent takes model, effort or steps',
+      '"agents.scout" has the unknown setting "temperature"; an agent takes enabled, model, effort or steps',
     ]);
   });
 
@@ -261,6 +274,27 @@ describe("loadSettings", () => {
     expect(globalOnly.sources.max_helper_slots).toBe(global);
     const omitted = loadSettings(harness, fakeEnvironment({ ...files, [project]: '{ "review": "never" }' }, env), "/repo");
     expect(omitted.settings.maxHelperSlots).toBe(6);
+  });
+
+  test("enabled merges per helper and per field, and each switch names the file that set it", () => {
+    const files = {
+      [site]: '{ "agents": { "tester": { "enabled": true, "effort": "low" } } }',
+      [global]: '{ "agents": { "builder": { "enabled": false } } }',
+      [project]: '{ "agents": { "tester": { "steps": 9 }, "builder": { "enabled": true } } }',
+    };
+    const loaded = loadSettings(harness, fakeEnvironment(files, env), "/repo");
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.settings.agents).toEqual({ tester: { enabled: true, effort: "low", steps: 9 }, builder: { enabled: true } });
+    expect(loaded.sources).toMatchObject({ "agents.tester.enabled": site, "agents.builder.enabled": project, "agents.tester.steps": project });
+    const globalOnly = loadSettings(harness, fakeEnvironment(files, env), undefined);
+    expect(globalOnly.settings.agents.builder).toEqual({ enabled: false });
+  });
+
+  test("switching lead off ignores the whole file", () => {
+    const loaded = loadSettings(harness, fakeEnvironment({ [global]: '{ "review": "never" }', [project]: '{ "review": "always", "agents": { "lead": { "enabled": false } } }' }, env), "/repo");
+    expect(loaded.settings.review).toBe("never");
+    expect(loaded.applied).toEqual([global]);
+    expect(loaded.problems).toEqual([{ message: `ecmwf-multi-agents: ignoring ${project}: "agents.lead.enabled" cannot be set: lead is always on`, notify: true }]);
   });
 
   test("an invalid helper limit ignores the whole project file and keeps the global limit", () => {

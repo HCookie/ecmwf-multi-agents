@@ -3,9 +3,9 @@
 
 import { describe, expect, test } from "bun:test";
 import { INLINE_WAKE_TEXT, WAKE_TEXT } from "./answer-first.ts";
-import { INLINE_MARK } from "./inline.ts";
+import { INLINE_MARK, reviewerOffText } from "./inline.ts";
 import { createPlugin } from "./plugin.ts";
-import { LEAD_PROMPT, embeddedFixture, fakeEnvironment } from "./testing.ts";
+import { HELPER_OFF, LEAD_PROMPT, TESTER_ROUTING, embeddedFixture, fakeEnvironment } from "./testing.ts";
 import type { V2AgentEditor, V2AgentInfo, V2CommandDefinition, V2CommandEditor, V2Context, V2ContextEvent, V2Event, V2ModelMessage, V2ToolCall, V2ToolInfo } from "./types.ts";
 import { v2ProjectRoot } from "./v2.ts";
 
@@ -28,7 +28,7 @@ class FakeHost {
   /** The `context` session hooks, which see each model request before it is sent. */
   contextHooks: Array<(event: V2ContextEvent) => Promise<void> | void> = [];
   /** Messages the plugin asked opencode to write as its own. */
-  synthetics: Array<{ sessionID: string; text: string; description?: string; delivery?: string }> = [];
+  synthetics: Array<{ sessionID: string; text: string; description?: string; delivery?: string; resume?: boolean }> = [];
   prompts: Array<{ sessionID: string; text: string; delivery?: string }> = [];
   interrupts: string[] = [];
   sessions: Record<string, { parentID?: string; agent?: string }> = {};
@@ -210,6 +210,25 @@ describe("v2 setup", () => {
     expect(state.agents.get("lead")!.system).toContain("Review policy: always");
     expect(state.agents.get("lead")!.system).toContain("Run at most 8 helpers at once.");
     expect(state.default).toBe("lead");
+  });
+
+  test("settings switch helpers: an optional one arrives, a default one goes, and lead's list follows", async () => {
+    const { host, write } = await start({ [GLOBAL]: '{ "agents": { "tester": { "enabled": true } } }', [PROJECT]: '{ "agents": { "scout": { "enabled": false } } }' });
+    host.loader();
+    // Before the late transform: the files' scout is there, and so is the registered tester.
+    expect(host.build().agents.has("scout")).toBe(true);
+    expect(host.build().agents.get("tester")).toMatchObject({ mode: "subagent", system: "You are tester." });
+
+    host.emit("plugin.updated");
+    await settle();
+    const state = host.build();
+    expect(state.agents.has("scout")).toBe(false);
+    expect(state.agents.has("builder")).toBe(true);
+    expect(state.agents.get("tester")!.model).toEqual({ id: "gpt-6.1-sol", providerID: "github-copilot", variant: "high" });
+    const lead = state.agents.get("lead")!.system!;
+    expect(lead).not.toContain("- scout:");
+    expect(lead).toContain(`- reviewer: checks work.\n- tester: ${TESTER_ROUTING}\n- ${HELPER_OFF}\n`);
+    expect(write).toEqual([]);
   });
 
   test("a later activation that reloads the loader is followed by a fresh registration at the end", async () => {
@@ -564,6 +583,20 @@ describe("v2 inline commands", () => {
     await settle();
     expect(host.commandTransforms).toHaveLength(3);
     expect(host.commands().get("review")!.description).toBe("Independent review of your changes");
+  });
+
+  test("with scout and the reviewer off, /progress runs on lead and /review answers with a notice", async () => {
+    const { host } = await start({ [PROJECT]: '{ "agents": { "scout": { "enabled": false }, "reviewer": { "enabled": false } } }' });
+    host.sessions.root = { agent: "lead" };
+    host.emit("plugin.updated");
+    await settle();
+    await host.commands().get("progress")!.execute({ sessionID: "root", prompt: { text: "export" } });
+    await settle();
+    expect(host.switches).toEqual([]);
+    expect(host.prompts.at(-1)).toMatchObject({ sessionID: "root", text: "Progress of export" });
+    await host.commands().get("review")!.execute({ sessionID: "root", prompt: { text: "main" } });
+    await settle();
+    expect(host.synthetics).toEqual([{ sessionID: "root", text: reviewerOffText(harness), description: "The reviewer is off", resume: false }]);
   });
 
   test("a helper's request goes to the inline run and lead's to answer-first, through the one context hook", async () => {
