@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { TOOL_SPECS } from "../plugin/helpers.ts";
 import { load } from "./load.ts";
 import { resolveHarness } from "./resolve.ts";
 import { type JsonSchema, settingsSchema } from "./schema.ts";
@@ -146,6 +147,19 @@ describe("the optional helpers", () => {
 });
 
 describe("lead", () => {
+  test("says when to use the helper tools, and their own descriptions say how, so the prompt need not repeat it", () => {
+    const prompt = agent("lead").prompt;
+    expect(prompt).toContain("Use `helpers_status`, `helpers_steer` and `helpers_cancel` only when the user asks or a helper is off its brief, never to wait or poll.");
+    expect(TOOL_SPECS.status.description).toContain("Never use it to wait");
+    expect(TOOL_SPECS.steer.description).toContain("cancel and brief again when the direction was wrong");
+    expect(TOOL_SPECS.steer.description).toContain("continued with the delegation tool's continuation parameter");
+    expect(TOOL_SPECS.steer.description).toContain("An amendment is never an approval");
+    expect(TOOL_SPECS.cancel.description).toContain("check the files it was working on");
+    for (const repeated of ["keeping its context", "An amendment is never an approval", "where it has one", "your brief is its whole prompt", "marked as recommended"]) {
+      expect([repeated, prompt.includes(repeated)]).toEqual([repeated, false]);
+    }
+  });
+
   test("asks the user only through the question tool, and states each option's pros and cons in a few words", () => {
     const asking = /## Asking the user\n\n([\s\S]*?)\n\n##/.exec(agent("lead").prompt)?.[1] ?? "";
     expect(asking).toContain("Ask the user through the question tool, never in your reply");

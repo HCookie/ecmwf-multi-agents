@@ -29,6 +29,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
   approval.
 - `lead` asks you its questions through the question tool, never in its reply, and gives each
   option's pros and cons in a few words.
+- `lead`'s instructions are about 150 tokens shorter: they no longer repeat what the
+  descriptions of its tools already say.
 
 ## [0.7.1] - 2026-11-05
 

@@ -794,6 +794,20 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   lost words that added no instruction; the one about `/review` and `/progress` no longer says
   a scout answers, which is not so with `scout` off. `lead` 2049 tokens (2050),
   `lead-all` 2396 (2400)
+- [x] Tiago: Condense `lead`'s prompt, after measuring its whole request on 2.2.5 with the
+  stand-in: about 7,800 tokens, of which the prompt is 26%, tool definitions 48% and
+  opencode's other text 25% (the Code Mode catalog alone 1,295); in the real-model runs
+  `lead`'s input is almost all cache reads, so the prompt is about 11% of its cost. Removed
+  what the descriptions of its tools already say (the helper tools, the delegation tool's
+  background option and helper list, the question tool's recommended option) and one
+  repeated sentence: 2049 to 1893 tokens. Budgets lowered to `lead` 1900 and `lead-all` 2250.
+  Tests pin the tool descriptions the prompt now relies on, in the plugin's specs and in a
+  real `lead` request
+- [ ] Shorten `lead` further with code changes, measured at about 55, 70 and 150 tokens: the
+  plugin writes only the active review policy's meaning; the plugin, not `lead`, adds the
+  work folder to the git exclude file; the routing guidance moves into the helpers'
+  descriptions, which the delegation tool lists only for helpers that are on, replacing
+  `lead`'s helper list and its rewrite (descriptions also show in the TUI)
 - [ ] Tiago: Release 0.8.0 when asked
 
 Exit: `make check` and the integration suites pass on 2.2.5; each new helper and each switched

@@ -760,8 +760,8 @@ Prompt budgets, checked by the generator at about four characters per token:
 
 | Kind | Budget |
 |---|---|
-| `lead` prompt | 2,050 tokens |
-| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | 2,400 tokens (`lead-all`) |
+| `lead` prompt | 1,900 tokens |
+| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | 2,250 tokens (`lead-all`) |
 | Helper prompt | 750 tokens |
 | Routing line of an optional helper | 100 tokens |
 | Command template | 500 tokens |

@@ -29,7 +29,11 @@
   //   work while the reviewer is off, and the data scientist's folder named in its line.
   // - skill 1500 -> 1750: the users' guide to the optional helpers and to switching helpers on
   //   and off. Measured 1736; the guide is loaded only when the user asks how the harness works.
-  "budgets": { "lead": 2050, "helper": 750, "command": 500, "skill": 1750, "routing": 100, "lead-all": 2400 },
+  // - lead 2050 -> 1900, lead-all 2400 -> 2250, lowered to the measured size: lead's prompt no
+  //   longer repeats what the descriptions of its tools say (the helper tools, the delegation
+  //   tool's background option and helper list, the question tool's recommended option).
+  //   Measured 1893 and 2241.
+  "budgets": { "lead": 1900, "helper": 750, "command": 500, "skill": 1750, "routing": 100, "lead-all": 2250 },
 
   // Named lists of {action, resource}. A permission entry {"use": name, "effect": e}
   // expands to one rule per item, all with effect e.

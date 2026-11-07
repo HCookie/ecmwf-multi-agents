@@ -153,8 +153,8 @@ function installed(dir: string, name: string): string[] {
  * runs `touch <name>` in the shell once; every request is recorded.
  */
 function standIn() {
-  /** Each request: the agent, its user messages, and the subagents its delegation tool lists. */
-  const seen: Array<{ agent: string; users: string[]; subagents?: string }> = [];
+  /** Each request: the agent, its user messages, the subagents its delegation tool lists, and every tool's description. */
+  const seen: Array<{ agent: string; users: string[]; subagents?: string; tools: Record<string, string> }> = [];
   const textOf = (message: unknown): string => {
     const content = (message as { content?: unknown } | undefined)?.content;
     if (typeof content === "string") return content;
@@ -183,8 +183,9 @@ function standIn() {
       const agent = system.includes("You are the reviewer") ? "reviewer" : system.includes("You are lead") ? "lead" : "other";
       const text = agent === "reviewer" ? "VERDICT: APPROVE\nCHECKED: the stand-in" : "lead done";
       const users = messages.filter((message) => role(message) === "user").map(textOf);
-      const subagents = (Array.isArray(body.tools) ? body.tools : []).find((tool) => tool?.function?.name === "subagent")?.function?.description;
-      seen.push({ agent, users, ...(subagents === undefined ? {} : { subagents }) });
+      const tools = Object.fromEntries((Array.isArray(body.tools) ? body.tools : []).map((tool) => [tool?.function?.name ?? "", tool?.function?.description ?? ""]));
+      const subagents = tools.subagent;
+      seen.push({ agent, users, tools, ...(subagents === undefined ? {} : { subagents }) });
       const touch = /TOUCH (\S+)/.exec(users.at(-1) ?? "");
       if (touch && body.stream && !messages.some((message) => role(message) === "tool")) {
         const call = { name: "shell", arguments: JSON.stringify({ command: `touch ${touch[1]}`, description: "touch" }) };
@@ -635,6 +636,13 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
     const request = await within(30_000, "lead's request", async () => model.seen.slice(asked).find((item) => item.agent === "lead" && item.users.at(-1) === "hello"));
     for (const id of ["builder", "tester"]) expect([id, request.subagents?.includes(`\n- ${id}: `)]).toEqual([id, true]);
     for (const id of ["scout", "reviewer", "researcher", "designer", "data-scientist"]) expect([id, request.subagents?.includes(`\n- ${id}: `)]).toEqual([id, false]);
+    // What lead's prompt leaves to the tools: opencode's own descriptions and the plugin's.
+    expect(request.tools.question).toContain('add "(Recommended)"');
+    expect(request.subagents).toContain("background=true");
+    expect(request.subagents).toContain("sessionID");
+    expect(request.tools.helpers_steer).toContain("An amendment is never an approval");
+    expect(request.tools.helpers_status).toContain("Never use it to wait");
+    expect(request.tools.helpers_cancel).toContain("check the files it was working on");
     type Message = { type?: string; text?: string; content?: Array<{ type?: string; text?: string }> };
     const messages = () => get<Message[]>(`/api/session/${session.id}/message`, project);
     await within(30_000, "lead's answer", async () =>
