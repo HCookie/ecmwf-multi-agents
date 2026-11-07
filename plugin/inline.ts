@@ -290,9 +290,11 @@ export class Inline {
   }
 
   /**
-   * A helper's command while the helper is off: `/review` says so, with a notice and no model
-   * turn, since nothing else can give an independent verdict; any other runs on lead, which does
-   * the helper's work (ADR 0005).
+   * A helper's command while the helper is off: any runs on lead, which does the helper's work,
+   * except `/review`, since nothing else gives an independent verdict (ADR 0005). It refuses: a
+   * command that throws fails with the error's message, which the TUI shows, and no model turn
+   * starts. A synthetic message would not do: with `resume: false` it waits in the session's
+   * inbox until the next run, and otherwise it wakes lead.
    */
   private withoutHelper(command: InlineCommand): V2CommandDefinition {
     const { harness, ctx, reporter } = this.deps;
@@ -302,9 +304,8 @@ export class Inline {
     return {
       name: command.name,
       ...(command.description === undefined ? {} : { description: command.description }),
-      execute: async (invocation) => {
-        if (typeof invocation?.sessionID !== "string") return;
-        await ctx.session?.synthetic?.({ sessionID: invocation.sessionID, text: reviewerOffText(harness), description: `The ${command.agent} is off`, resume: false });
+      execute: async () => {
+        throw new Error(reviewerOffText(harness));
       },
     };
   }

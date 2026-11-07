@@ -334,10 +334,11 @@ message, which `lead` relays briefly, without re-running its checks. Either way 
 REJECT or on a plan's state only when the user asks.
 
 When the command's helper is switched off, the plugin's command does without it: `/progress`
-runs on `lead`, in the user's session, from the same text; `/review` posts a notice that the
-reviewer is off in this project and names the setting that switches it on, with no model turn
-(`session.synthetic` with `resume: false`). `/onboard` follows `lead`'s rule for helpers that
-are off: with `scout` off, `lead` does the reading itself.
+runs on `lead`, in the user's session, from the same text; `/review` refuses: it fails with a
+message that the reviewer is off here and names the setting that switches it on, which the TUI
+shows in a toast, and no model turn starts (`docs/research/opencode-v2.md`, Addendum: switching
+helpers on and off). `/onboard` follows `lead`'s rule for helpers that are off: with `scout`
+off, `lead` does the reading itself.
 
 A native command for a helper cannot answer inline: it would switch the session to the helper for
 good, so the user's next message would go to the helper, and the helper would see the whole

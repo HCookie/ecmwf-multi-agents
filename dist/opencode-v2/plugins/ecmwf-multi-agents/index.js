@@ -1127,10 +1127,8 @@ class Inline {
     return {
       name: command.name,
       ...command.description === undefined ? {} : { description: command.description },
-      execute: async (invocation) => {
-        if (typeof invocation?.sessionID !== "string")
-          return;
-        await ctx.session?.synthetic?.({ sessionID: invocation.sessionID, text: reviewerOffText(harness), description: `The ${command.agent} is off`, resume: false });
+      execute: async () => {
+        throw new Error(reviewerOffText(harness));
       }
     };
   }

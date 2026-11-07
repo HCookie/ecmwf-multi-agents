@@ -978,10 +978,15 @@ Questions behind optional and switchable helpers (ADR 0005), checked in the `v2.
    configured, reached through Code Mode while `execute` is not denied
    (`core/src/tool.ts:274`), or with a headless browser from the shell; the `read` tool hands
    an image file to the model (`core/src/tool/plugin/read.ts:205-209`).
-4. Can a plugin command answer without a model turn? Yes. `session.synthetic` takes
-   `resume: false`, which records the message without waking the session
-   (`core/src/session/session.ts:286-325`); the plugin context passes the call through
-   unchanged (`core/src/plugin/host.ts:628`), and opencode's own Plan mode plugin uses it for
-   its reminders (`core/src/plugin/plan.ts:67`). The message is a notice the user sees and the
-   agent reads at its next turn.
+4. Can a plugin command answer without a model turn? Yes, by refusing. A command whose
+   `execute` throws fails with a `CommandExecutionError` carrying the error's message
+   (`core/src/command.ts:84-92`); the HTTP call answers 500 with that message, and the TUI
+   shows it in an error toast and puts the command back in the prompt
+   (`tui/src/component/prompt/index.tsx:1202-1205` and `:1334-1336`). No turn starts. A
+   synthetic message does not serve: `session.synthetic` with `resume: false` admits it to the
+   session's inbox without waking the session (`core/src/session/session.ts:286-325`), and the
+   inbox is promoted into the conversation only by the next run, so nothing shows until then
+   (`core/src/session/inbox.ts`); opencode's own Plan mode plugin uses it only from inside a run
+   (`core/src/plugin/plan.ts:67`). Without `resume: false` it wakes the agent. Checked in a
+   sandbox: the refused command answered 500 with the message, and the session had no message.
 

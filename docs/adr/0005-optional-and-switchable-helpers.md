@@ -24,8 +24,8 @@ the delegation tool's list of subagents, which every `lead` request carries. `le
 at its budget (2047 of 2050 tokens).
 
 opencode 2.2.5 lets a plugin remove any agent from its late agent transform, whatever brought
-it, and a removed agent leaves the delegation tool's list. A plugin command can post a notice
-without starting a model turn. A helper cannot use opencode's browser tools, which only work in
+it, and a removed agent leaves the delegation tool's list. A plugin command can refuse with a
+message, which the TUI shows, without starting a model turn. A helper cannot use opencode's browser tools, which only work in
 the session a desktop browser attached to (`docs/research/opencode-v2.md`, Addendum: switching
 helpers on and off).
 
@@ -49,7 +49,8 @@ helpers on and off).
 - `lead` may delegate to every harness helper; an allow rule for a helper that is not there
   lists nothing.
 - With the reviewer off the review policy is `never`; a settings file that chose another policy
-  gets a warning. `/review` then answers with a notice and no model turn. With `scout` off,
+  gets a warning. `/review` then refuses with a message naming the setting, and no model turn
+  starts. With `scout` off,
   `/progress` runs on `lead`; `/onboard` and the plan skill follow `lead`'s rule for helpers
   that are off.
 - Writes stay narrow: `researcher` writes notes and its scratch folder, `designer` its design

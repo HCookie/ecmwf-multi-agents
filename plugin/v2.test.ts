@@ -28,7 +28,7 @@ class FakeHost {
   /** The `context` session hooks, which see each model request before it is sent. */
   contextHooks: Array<(event: V2ContextEvent) => Promise<void> | void> = [];
   /** Messages the plugin asked opencode to write as its own. */
-  synthetics: Array<{ sessionID: string; text: string; description?: string; delivery?: string; resume?: boolean }> = [];
+  synthetics: Array<{ sessionID: string; text: string; description?: string; delivery?: string }> = [];
   prompts: Array<{ sessionID: string; text: string; delivery?: string }> = [];
   interrupts: string[] = [];
   sessions: Record<string, { parentID?: string; agent?: string }> = {};
@@ -585,7 +585,7 @@ describe("v2 inline commands", () => {
     expect(host.commands().get("review")!.description).toBe("Independent review of your changes");
   });
 
-  test("with scout and the reviewer off, /progress runs on lead and /review answers with a notice", async () => {
+  test("with scout and the reviewer off, /progress runs on lead and /review refuses with a message", async () => {
     const { host } = await start({ [PROJECT]: '{ "agents": { "scout": { "enabled": false }, "reviewer": { "enabled": false } } }' });
     host.sessions.root = { agent: "lead" };
     host.emit("plugin.updated");
@@ -594,9 +594,11 @@ describe("v2 inline commands", () => {
     await settle();
     expect(host.switches).toEqual([]);
     expect(host.prompts.at(-1)).toMatchObject({ sessionID: "root", text: "Progress of export" });
-    await host.commands().get("review")!.execute({ sessionID: "root", prompt: { text: "main" } });
+    const prompts = host.prompts.length;
+    await expect(host.commands().get("review")!.execute({ sessionID: "root", prompt: { text: "main" } })).rejects.toThrow(reviewerOffText(harness));
     await settle();
-    expect(host.synthetics).toEqual([{ sessionID: "root", text: reviewerOffText(harness), description: "The reviewer is off", resume: false }]);
+    expect(host.synthetics).toEqual([]);
+    expect(host.prompts).toHaveLength(prompts);
   });
 
   test("a helper's request goes to the inline run and lead's to answer-first, through the one context hook", async () => {

@@ -346,8 +346,6 @@ export interface V2Context {
       description?: string;
       metadata?: Record<string, unknown>;
       delivery?: "steer" | "queue";
-      /** false: record the message without starting a turn (core/src/session/session.ts at v2.2.5). */
-      resume?: boolean;
     }) => Promise<unknown>;
     hook?: (name: "context", callback: (event: V2ContextEvent) => Promise<void> | void) => Promise<V2Registration>;
   };

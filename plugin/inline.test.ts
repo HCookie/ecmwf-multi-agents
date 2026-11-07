@@ -209,7 +209,7 @@ class FakeSessions {
   model: V2ModelRef | undefined = { id: "m1", providerID: "mock" };
   parents: Record<string, string | undefined> = {};
   prompts: Array<Record<string, unknown>> = [];
-  synthetics: Array<{ sessionID: string; text: string; description?: string; delivery?: string; resume?: boolean }> = [];
+  synthetics: Array<{ sessionID: string; text: string; description?: string; delivery?: string }> = [];
   /** Each `wait` call waits for the next `release()`. */
   private waiting: Array<() => void> = [];
   autoRelease = true;
@@ -549,12 +549,14 @@ describe("Inline with a helper switched off", () => {
     expect(other.sessions.calls).toEqual(["agent:lead", "prompt"]);
   });
 
-  test("/review says the reviewer is off and how to switch it on, with no model turn", async () => {
+  test("/review refuses with a message that the reviewer is off and how to switch it on, and starts no turn", async () => {
     const { sessions, command } = makeOff(["scout", "builder"]);
-    await command("review").execute({ sessionID: "s", prompt: { text: "main" } });
+    // opencode fails the command with this message, which the TUI shows; nothing reaches a model.
+    await expect(command("review").execute({ sessionID: "s", prompt: { text: "main" } })).rejects.toThrow(reviewerOffText(harness));
     await settle();
     expect(sessions.prompts).toEqual([]);
-    expect(sessions.synthetics).toEqual([{ sessionID: "s", text: reviewerOffText(harness), description: "The reviewer is off", resume: false }]);
+    expect(sessions.synthetics).toEqual([]);
+    expect(sessions.calls).toEqual([]);
     expect(reviewerOffText(harness)).toBe(
       'The reviewer is switched off here, so /review cannot run and nothing is reviewed. To switch it on, set "agents": { "reviewer": { "enabled": true } } in .opencode/ecmwf-multi-agents.jsonc for this project, or in ecmwf-multi-agents.jsonc in your opencode config folder for every project, then restart opencode.',
     );
