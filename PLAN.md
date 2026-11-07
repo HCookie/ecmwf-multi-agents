@@ -707,6 +707,53 @@ merges.
 Exit: `make check` and the integration suites pass on 2.0.29 with no 1.x code left; every row
 above works on the stand-in; the real-model evals pass on opencode 2.
 
+## Phase 10: switchable helpers and optional specialists
+
+Any helper can be switched on or off per project with `agents.<id>.enabled`; `lead` always
+stays on. Four new helpers, off by default: `researcher` (deep investigation, may run
+experiments in a scratch folder), `tester` (tries to break code, adds tests, drafts issues that
+`lead` files after approval), `designer` (UI specs and standalone prototypes; a builder
+implements them) and `data-scientist` (examines datasets through scripts rather than reading
+them). No new commands: `lead` routes. A helper that is off is gone from `lead`'s list and
+delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on `lead`, and
+`/review` says the reviewer is off. Delivered as one release; tests come first in every task.
+
+| Agent | Writes | Default profile |
+|---|---|---|
+| `researcher` | `.ecmwf-multi-agents/notes/`, `scratch/<slug>/` | Claude Opus 5.5, max |
+| `tester` | test files and scratch probes, issue drafts in `issues/` | GPT 6.1 Sol through Copilot, high |
+| `designer` | `.ecmwf-multi-agents/design/<slug>/` | Claude Opus 5.5, high |
+| `data-scientist` | `.ecmwf-multi-agents/data/<slug>/` | Claude Sonnet 5.5, high |
+
+- [~] Tiago: Research on opencode 2.2.5: removing or disabling an agent from the late
+  transform for file, central and registered agents, and whether it leaves `lead`'s subagent
+  list; browser access for a helper (opencode's browser tools, Playwright through Code Mode, a
+  headless screenshot from the shell); a plugin command that answers without a model turn.
+  Addendum in `docs/research/opencode-v2.md`
+- [ ] Tiago: ADR 0005 and `docs/architecture.md`: optional and switchable helpers (roles,
+  permissions, routing, settings, profiles, work files)
+- [ ] Tiago: Settings `agents.<id>.enabled` (boolean; refused for `lead`), merge, sources,
+  schema
+- [ ] Tiago: Manifest and generator: optional agents, one routing line per helper, files for
+  agents that are off by default, a budget for `lead` with every helper on, the embedded data
+- [ ] Tiago: Plugin applies the enabled set: helpers that are off removed and denied to
+  `lead`, `lead`'s helper list rewritten, review policy `never` when the reviewer is off,
+  helper tools and `doctor`'s comparison cover every helper
+- [ ] Tiago: Commands with a helper off: `/progress` on `lead`, `/review` explains, `/onboard`
+  and the plan skill name any helper that is on
+- [ ] Tiago: `doctor` and the installer report each helper on or off and the file that chose it
+- [ ] Tiago: The four agents: prompts, permissions, profiles, routing lines; `lead` asks before
+  `gh issue create`
+- [ ] Tiago: Guide and plan skills, README, install guide, changelog
+- [ ] Tiago: Integration tests on 2.2.5 (a `plugins` line, a file install, a central install)
+  with `tester` and `designer` on and `builder` off
+- [ ] Tiago: Eval cases for the new helpers and a helper switched off, passing on the stand-in;
+  real-model runs only with the owner's approval of the quota
+- [ ] Tiago: Release 0.8.0 when asked
+
+Exit: `make check` and the integration suites pass on 2.2.5; each new helper and each switched
+off helper works on the stand-in.
+
 ## Follow-ups
 
 - [x] Tiago: Issue #6, configurable `max_helper_slots` (integer at least 1, default 4):
