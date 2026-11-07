@@ -21,7 +21,16 @@ You talk to one agent, `lead`. It works out what you need, asks when something i
 - `builder`: makes one clearly specified change and runs its checks.
 - `reviewer`: independent APPROVE or REJECT on plans and changes.
 
-`lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper ones, so sessions cost less. Where the profile allows, the reviewer uses a different model family, to catch mistakes the others share.
+Four more helpers are off until you switch them on (see Settings):
+
+- `researcher`: deep investigation of a hard question; may run experiments in a scratch folder.
+- `tester`: tries to break code and adds tests; drafts issues that `lead` files only when you approve.
+- `designer`: interface specs and prototypes you can open in a browser; a builder builds them.
+- `data-scientist`: answers questions about datasets with scripts, without reading the data in.
+
+You can also switch off `scout`, `builder` or the reviewer for a project: `lead` then does that work itself, and with the reviewer off nothing is reviewed.
+
+`lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper ones, so sessions cost less. Where the profile allows, the reviewer and the tester use a different model family, to catch mistakes the others share.
 
 ## Commands and typical use
 
@@ -32,7 +41,7 @@ You talk to one agent, `lead`. It works out what you need, asks when something i
 - `/review [target]`: independent review, under any policy, of your uncommitted changes (no target), a branch, a pull request (number or URL) or a plan file. It replaces opencode's own `/review`.
 - `/guide [question]`: this guide.
 
-A project's own command or agent with the same name, such as its own `/onboard`, takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide a harness agent's model, effort and steps, the review policy and helper limit.
+A project's own command or agent with the same name, such as its own `/onboard`, takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide a harness agent's model, effort and steps, the review policy, the helper limit and which helpers are on.
 
 ## Review policy
 
@@ -55,12 +64,13 @@ Settings live in `~/.config/opencode/ecmwf-multi-agents.jsonc`. A project can ov
   "max_helper_slots": 4, // helpers at once, integer at least 1
   "agents": { // per-agent overrides, after the profile
     "builder": { "effort": "xhigh" },
-    "reviewer": { "model": "provider/model-name", "steps": 40 }
+    "reviewer": { "model": "provider/model-name", "steps": 40 },
+    "tester": { "enabled": true } // switch a helper on or off
   }
 }
 ```
 
-Each agent takes `model`, `effort` and `steps`. Effort is how hard a model thinks: more effort is slower and costs more. Values: `low`, `medium`, `high`, `xhigh`, `max`; some models also `none`. Defaults: `lead` xhigh, `builder` high, `scout` and reviewer medium. Effort needs a model, so under `inherit` set `model` too. `steps` caps an agent's turns, which limits cost.
+Each agent takes `model`, `effort` and `steps`; a helper also takes `enabled`, `true` or `false`. A project's file can switch on a helper that is off in yours, or the other way round. Effort is how hard a model thinks: more effort is slower and costs more. Values: `low`, `medium`, `high`, `xhigh`, `max`; some models also `none`. Defaults: `lead` xhigh, `builder` high, `scout` and reviewer medium. Effort needs a model, so under `inherit` set `model` too. `steps` caps an agent's turns, which limits cost.
 
 `max_helper_slots` tells `lead` how many helpers may run at once (default 4). More slots can run more builders, databases, dev servers and builds on the same machine; raise it with care. `/execute` and `/onboard` follow this limit.
 
@@ -79,13 +89,13 @@ If a helper is doing something you do not want, tell `lead`: "redirect the scout
 
 ## Work files
 
-Plans, scout notes and the onboarding summary live in `.ecmwf-multi-agents/` at the top of the repository, kept out of git by `.git/info/exclude`.
+Plans, notes, the onboarding summary and the optional helpers' folders (`scratch`, `issues`, `design`, `data`) live in `.ecmwf-multi-agents/` at the top of the repository, kept out of git by `.git/info/exclude`.
 
 ## Safety
 
 - Agents commit only when you ask.
-- Pushing, opening or merging a pull request, rewriting history and discarding changes always ask for your approval.
-- Helpers cannot commit, push or rewrite history. Scouts write only their notes; the reviewer changes no files.
+- Pushing, opening or merging a pull request, rewriting history, discarding changes and filing an issue always ask for your approval.
+- Helpers cannot commit, push or rewrite history. Scouts write only their notes; the reviewer changes no files. The researcher, designer and data scientist write only their own folders; the tester changes only tests.
 - The harness never asks for credentials. Never paste passwords or tokens into the chat.
 
 ## Troubleshooting

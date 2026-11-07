@@ -755,7 +755,8 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   `gh issue create`. Prompts 746, 731, 704 and 746 tokens (helper budget 750); routing lines
   62 to 71 (budget 100); `lead` with every line 2341 (`lead-all` 2350). `tools/harness.test.ts`
   holds the source to the contract: rules, folders, report formats and profiles
-- [ ] Tiago: Guide and plan skills, README, install guide, changelog
+- [x] Tiago: Guide and plan skills, README, install guide, changelog. The guide grew to 1736
+  tokens, so the skill budget went from 1500 to 1750 (reason in the manifest)
 - [ ] Tiago: Integration tests on 2.2.5 (a `plugins` line, a file install, a central install)
   with `tester` and `designer` on and `builder` off
 - [ ] Tiago: Eval cases for the new helpers and a helper switched off, passing on the stand-in;

@@ -756,11 +756,11 @@ Prompt budgets, checked by the generator at about four characters per token:
 | Kind | Budget |
 |---|---|
 | `lead` prompt | 2,050 tokens |
-| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | measured, in the manifest as `leadAll` |
+| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | 2,350 tokens (`lead-all`) |
 | Helper prompt | 750 tokens |
 | Routing line of an optional helper | 100 tokens |
 | Command template | 500 tokens |
-| Skill | 1,500 tokens |
+| Skill | 1,750 tokens |
 
 A budget is a ceiling, not a target. It is raised only to the measured size of a change,
 rounded up to the next 50, and the manifest records why; the evals then show what the

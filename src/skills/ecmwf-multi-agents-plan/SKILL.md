@@ -50,7 +50,7 @@ Parallel: T1 and T2.
 - 2026-10-11: Plan written. Reviewer: APPROVE.
 ```
 
-Status is one of draft, approved, in progress, done, stopped. Context holds decisions, constraints, findings with `path:line` and assumptions. Agent is builder or scout. Files are the paths the task may change (for scouts, the paths to read). Parallel lists tasks that share no files and do not depend on each other.
+Status is one of draft, approved, in progress, done, stopped. Context holds decisions, constraints, findings with `path:line` and assumptions. Agent is builder, scout or another helper in your list; a task for a helper that is off is yours. Files are the paths the task may change (for scouts, the paths to read). Parallel lists tasks that share no files and do not depend on each other.
 
 ## Carrying out a plan
 

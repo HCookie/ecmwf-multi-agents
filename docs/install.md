@@ -75,6 +75,28 @@ an integer of at least 1. More slots can run more builders, databases, dev serve
 on the same machine, so raise it with care. `doctor` shows the setting and the instruction
 actually loaded into `lead`.
 
+### Switching helpers on and off
+
+Four optional helpers, `researcher`, `tester`, `designer` and `data-scientist`, are off until a
+settings file switches them on; `scout`, `builder` and `reviewer` are on until one switches them
+off. `lead` is always on. For example, in a project's `.opencode/ecmwf-multi-agents.jsonc`:
+
+```jsonc
+{
+  "agents": {
+    "tester": { "enabled": true },
+    "builder": { "enabled": false }
+  }
+}
+```
+
+`enabled` merges like the other agent fields, so a project's file can switch on a helper that
+your own file leaves off, or the other way round. A helper that is off does not exist in that
+project: `lead` does its work itself. With the reviewer off nothing is reviewed and `/review`
+says so; with `scout` off `/progress` runs on `lead`. The optional helpers have no agent files:
+the plugin brings them, so they need the plugin, which every install includes. Restart opencode
+after a change; `doctor` lists the helpers that are on and off and the file that switched each.
+
 ## Install for one project
 
 ```sh
@@ -118,8 +140,9 @@ that project only; other projects served by the same opencode are not affected. 
 commands and skills of your own or of the project, and a `default_agent` in a config, still
 win, as they do over installed files, with the two exceptions the README names under "Switch
 it on per project": the plugin's `/review` and `/progress` replace command files with those
-names, and the settings decide the model, effort and step limit of the harness agents and
-`lead`'s review line and helper limit. Settings come from the same files as for an install:
+names, and the settings decide which helpers are on, the model, effort and step limit of the
+harness agents, and `lead`'s review line, helper limit and helper list. Settings come from the
+same files as for an install:
 `~/.config/opencode/ecmwf-multi-agents.jsonc` and the project's
 `.opencode/ecmwf-multi-agents.jsonc`.
 
@@ -317,8 +340,10 @@ Each line starts with OK, WARN or FAIL:
 - what opencode itself loaded, asked through the plugin with
   `opencode api --standalone` from the project folder (or the current folder without
   `--project`): whether `lead` is loaded and is the harness's own, its `Review policy:` line,
-  `max_helper_slots` and the helper limit in its instructions,
-  the default agent, and every problem the plugin found, such as an ignored settings file.
+  `max_helper_slots` and the helper limit in its instructions, the helpers that are on and
+  off with the settings files that switched them (a WARN for a helper opencode did not
+  follow), the default agent, and every problem the plugin found, such as an ignored settings
+  file.
   When `lead` differs from the harness's, a WARN names the fields that differ and the
   `lead.md` files and opencode configs with an `agents.lead` entry it may come from. A FAIL
   saying the plugin is not active means opencode did not load it there: run `./install.sh`

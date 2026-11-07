@@ -2664,7 +2664,7 @@ Parallel: T1 and T2.
 - 2026-10-11: Plan written. Reviewer: APPROVE.
 \`\`\`
 
-Status is one of draft, approved, in progress, done, stopped. Context holds decisions, constraints, findings with \`path:line\` and assumptions. Agent is builder or scout. Files are the paths the task may change (for scouts, the paths to read). Parallel lists tasks that share no files and do not depend on each other.
+Status is one of draft, approved, in progress, done, stopped. Context holds decisions, constraints, findings with \`path:line\` and assumptions. Agent is builder, scout or another helper in your list; a task for a helper that is off is yours. Files are the paths the task may change (for scouts, the paths to read). Parallel lists tasks that share no files and do not depend on each other.
 
 ## Carrying out a plan
 
@@ -2678,7 +2678,106 @@ Status is one of draft, approved, in progress, done, stopped. Context holds deci
 8. Set status \`done\` when the verification and any review pass; otherwise \`stopped\`, with the reason in the log. Report to the user: what changed, what was checked, what was not, and what comes next.
 
 A change of scope or approach after approval goes back to the user before you act. Record the decision in the plan's context and log.
-`, description: "Plan file format and rules for ecmwf-multi-agents. Use when writing, updating or carrying out a plan in .ecmwf-multi-agents/plans/.", autoinvoke: false }, { id: "ecmwf-multi-agents-guide", name: "ecmwf-multi-agents-guide", content: "\n# ecmwf-multi-agents guide\n\nAnswer the user's questions about the harness from this guide, which speaks to the user. Answer only what was asked, in plain words.\n\n## The idea\n\nYou talk to one agent, `lead`. It works out what you need, asks when something is unclear, plans bigger work and hands reading, building and checking to helpers. Helpers work from a written brief, return a short report and never ask you anything, so `lead` keeps its memory for your conversation.\n\n## The agents\n\n- `lead`: talks to you, plans, hands out work, checks results, commits when asked.\n- `scout`: read-only lookups and investigations in code, docs and the web.\n- `builder`: makes one clearly specified change and runs its checks.\n- `reviewer`: independent APPROVE or REJECT on plans and changes.\n\n`lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper ones, so sessions cost less. Where the profile allows, the reviewer uses a different model family, to catch mistakes the others share.\n\n## Commands and typical use\n\n- New repository: start with `/onboard` (`/onboard <focus>` looks closer at one area). `lead` surveys the code and keeps a short summary for later sessions.\n- A question or a small change: just ask.\n- Bigger work: `/plan <goal>`. `lead` asks questions, investigates, writes a plan and waits. Approve it or ask for changes, then run `/execute`, ideally in a fresh session: the plan file holds everything needed. `/execute` runs ready tasks, several at once in the background, ticks each as its report arrives, and stops when it needs you; you can talk to `lead` meanwhile.\n- `/progress [plan]`: how far the current plan has got.\n- `/review [target]`: independent review, under any policy, of your uncommitted changes (no target), a branch, a pull request (number or URL) or a plan file. It replaces opencode's own `/review`.\n- `/guide [question]`: this guide.\n\nA project's own command or agent with the same name, such as its own `/onboard`, takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide a harness agent's model, effort and steps, the review policy and helper limit.\n\n## Review policy\n\n- `auto` (default): reviews plans before you approve them, and changes beyond trivial edits.\n- `ask`: `lead` asks you before each review.\n- `always`: reviews every plan and every change.\n- `never`: reviews only when you ask, for example with `/review`.\n\nAfter a REJECT the problems are fixed and checked again, at most twice; then `lead` brings what is left to you.\n\n## Settings\n\nSettings live in `~/.config/opencode/ecmwf-multi-agents.jsonc`. A project can override them in `.opencode/ecmwf-multi-agents.jsonc`. Restart opencode after a change.\n\n```jsonc\n{\n  \"review\": \"auto\", // auto, ask, always or never\n  \"profile\": \"default\", // default, anthropic, copilot or inherit\n  \"default_agent\": true, // start opencode on lead\n  \"max_helper_slots\": 4, // helpers at once, integer at least 1\n  \"agents\": { // per-agent overrides, after the profile\n    \"builder\": { \"effort\": \"xhigh\" },\n    \"reviewer\": { \"model\": \"provider/model-name\", \"steps\": 40 }\n  }\n}\n```\n\nEach agent takes `model`, `effort` and `steps`. Effort is how hard a model thinks: more effort is slower and costs more. Values: `low`, `medium`, `high`, `xhigh`, `max`; some models also `none`. Defaults: `lead` xhigh, `builder` high, `scout` and reviewer medium. Effort needs a model, so under `inherit` set `model` too. `steps` caps an agent's turns, which limits cost.\n\n`max_helper_slots` tells `lead` how many helpers may run at once (default 4). More slots can run more builders, databases, dev servers and builds on the same machine; raise it with care. `/execute` and `/onboard` follow this limit.\n\nProfiles give each agent a model and an effort:\n\n- `default`: Anthropic for `lead`, `scout` and `builder`; GitHub Copilot for the reviewer. Needs both connected.\n- `anthropic`: Anthropic only; the reviewer uses the strongest model.\n- `copilot`: GitHub Copilot only.\n- `inherit`: every agent uses the model you pick in the session.\n\n## Helpers in the background\n\n`lead` usually waits for a helper. When it has other work meanwhile, or you may want to keep talking, it hands off in the background and the report arrives later in your conversation. If `lead` is waiting on a helper and you want it back, press Ctrl+B to move the hand-off to the background.\n\nIf a helper is doing something you do not want, tell `lead`: \"redirect the scout: stay in src/\" or \"stop the builder\". `lead` can list its helpers, send one an amendment it reads at its next step, keeping what it has read, or stop one. You cannot type in a helper's session yourself. A stopped helper reports nothing; its changes stay on disk.\n\n## Work files\n\nPlans, scout notes and the onboarding summary live in `.ecmwf-multi-agents/` at the top of the repository, kept out of git by `.git/info/exclude`.\n\n## Safety\n\n- Agents commit only when you ask.\n- Pushing, opening or merging a pull request, rewriting history and discarding changes always ask for your approval.\n- Helpers cannot commit, push or rewrite history. Scouts write only their notes; the reviewer changes no files.\n- The harness never asks for credentials. Never paste passwords or tokens into the chat.\n\n## Troubleshooting\n\n- Run `./install.sh doctor` in the harness checkout (the folder you cloned) to check versions, installed files, settings and models. Invalid settings are ignored until fixed; doctor shows why.\n- A model is missing: connect its provider with `opencode auth login`, or pick another profile, then restart opencode.\n- opencode starts on `build`, not `lead`: the plugin did not load, `default_agent` is false, or your opencode config names another default agent. Switch with `/agents`. Without the plugin the agents work with default settings.\n- To update, run `git pull` in the checkout and restart opencode.\n", description: "User guide to the ecmwf-multi-agents harness: agents, commands, plans, review policy, settings and profiles. Use when the user asks how the harness works.", autoinvoke: false }], helperOff: "Helpers not in this list are switched off in this project: do their work yourself, also where a command or skill names them." });
+`, description: "Plan file format and rules for ecmwf-multi-agents. Use when writing, updating or carrying out a plan in .ecmwf-multi-agents/plans/.", autoinvoke: false }, { id: "ecmwf-multi-agents-guide", name: "ecmwf-multi-agents-guide", content: `
+# ecmwf-multi-agents guide
+
+Answer the user's questions about the harness from this guide, which speaks to the user. Answer only what was asked, in plain words.
+
+## The idea
+
+You talk to one agent, \`lead\`. It works out what you need, asks when something is unclear, plans bigger work and hands reading, building and checking to helpers. Helpers work from a written brief, return a short report and never ask you anything, so \`lead\` keeps its memory for your conversation.
+
+## The agents
+
+- \`lead\`: talks to you, plans, hands out work, checks results, commits when asked.
+- \`scout\`: read-only lookups and investigations in code, docs and the web.
+- \`builder\`: makes one clearly specified change and runs its checks.
+- \`reviewer\`: independent APPROVE or REJECT on plans and changes.
+
+Four more helpers are off until you switch them on (see Settings):
+
+- \`researcher\`: deep investigation of a hard question; may run experiments in a scratch folder.
+- \`tester\`: tries to break code and adds tests; drafts issues that \`lead\` files only when you approve.
+- \`designer\`: interface specs and prototypes you can open in a browser; a builder builds them.
+- \`data-scientist\`: answers questions about datasets with scripts, without reading the data in.
+
+You can also switch off \`scout\`, \`builder\` or the reviewer for a project: \`lead\` then does that work itself, and with the reviewer off nothing is reviewed.
+
+\`lead\` runs on the strongest model with the most effort, \`scout\` and \`builder\` on cheaper ones, so sessions cost less. Where the profile allows, the reviewer and the tester use a different model family, to catch mistakes the others share.
+
+## Commands and typical use
+
+- New repository: start with \`/onboard\` (\`/onboard <focus>\` looks closer at one area). \`lead\` surveys the code and keeps a short summary for later sessions.
+- A question or a small change: just ask.
+- Bigger work: \`/plan <goal>\`. \`lead\` asks questions, investigates, writes a plan and waits. Approve it or ask for changes, then run \`/execute\`, ideally in a fresh session: the plan file holds everything needed. \`/execute\` runs ready tasks, several at once in the background, ticks each as its report arrives, and stops when it needs you; you can talk to \`lead\` meanwhile.
+- \`/progress [plan]\`: how far the current plan has got.
+- \`/review [target]\`: independent review, under any policy, of your uncommitted changes (no target), a branch, a pull request (number or URL) or a plan file. It replaces opencode's own \`/review\`.
+- \`/guide [question]\`: this guide.
+
+A project's own command or agent with the same name, such as its own \`/onboard\`, takes precedence in that project, except \`/review\` and \`/progress\`. The settings, not an agent file, decide a harness agent's model, effort and steps, the review policy, the helper limit and which helpers are on.
+
+## Review policy
+
+- \`auto\` (default): reviews plans before you approve them, and changes beyond trivial edits.
+- \`ask\`: \`lead\` asks you before each review.
+- \`always\`: reviews every plan and every change.
+- \`never\`: reviews only when you ask, for example with \`/review\`.
+
+After a REJECT the problems are fixed and checked again, at most twice; then \`lead\` brings what is left to you.
+
+## Settings
+
+Settings live in \`~/.config/opencode/ecmwf-multi-agents.jsonc\`. A project can override them in \`.opencode/ecmwf-multi-agents.jsonc\`. Restart opencode after a change.
+
+\`\`\`jsonc
+{
+  "review": "auto", // auto, ask, always or never
+  "profile": "default", // default, anthropic, copilot or inherit
+  "default_agent": true, // start opencode on lead
+  "max_helper_slots": 4, // helpers at once, integer at least 1
+  "agents": { // per-agent overrides, after the profile
+    "builder": { "effort": "xhigh" },
+    "reviewer": { "model": "provider/model-name", "steps": 40 },
+    "tester": { "enabled": true } // switch a helper on or off
+  }
+}
+\`\`\`
+
+Each agent takes \`model\`, \`effort\` and \`steps\`; a helper also takes \`enabled\`, \`true\` or \`false\`. A project's file can switch on a helper that is off in yours, or the other way round. Effort is how hard a model thinks: more effort is slower and costs more. Values: \`low\`, \`medium\`, \`high\`, \`xhigh\`, \`max\`; some models also \`none\`. Defaults: \`lead\` xhigh, \`builder\` high, \`scout\` and reviewer medium. Effort needs a model, so under \`inherit\` set \`model\` too. \`steps\` caps an agent's turns, which limits cost.
+
+\`max_helper_slots\` tells \`lead\` how many helpers may run at once (default 4). More slots can run more builders, databases, dev servers and builds on the same machine; raise it with care. \`/execute\` and \`/onboard\` follow this limit.
+
+Profiles give each agent a model and an effort:
+
+- \`default\`: Anthropic for \`lead\`, \`scout\` and \`builder\`; GitHub Copilot for the reviewer. Needs both connected.
+- \`anthropic\`: Anthropic only; the reviewer uses the strongest model.
+- \`copilot\`: GitHub Copilot only.
+- \`inherit\`: every agent uses the model you pick in the session.
+
+## Helpers in the background
+
+\`lead\` usually waits for a helper. When it has other work meanwhile, or you may want to keep talking, it hands off in the background and the report arrives later in your conversation. If \`lead\` is waiting on a helper and you want it back, press Ctrl+B to move the hand-off to the background.
+
+If a helper is doing something you do not want, tell \`lead\`: "redirect the scout: stay in src/" or "stop the builder". \`lead\` can list its helpers, send one an amendment it reads at its next step, keeping what it has read, or stop one. You cannot type in a helper's session yourself. A stopped helper reports nothing; its changes stay on disk.
+
+## Work files
+
+Plans, notes, the onboarding summary and the optional helpers' folders (\`scratch\`, \`issues\`, \`design\`, \`data\`) live in \`.ecmwf-multi-agents/\` at the top of the repository, kept out of git by \`.git/info/exclude\`.
+
+## Safety
+
+- Agents commit only when you ask.
+- Pushing, opening or merging a pull request, rewriting history, discarding changes and filing an issue always ask for your approval.
+- Helpers cannot commit, push or rewrite history. Scouts write only their notes; the reviewer changes no files. The researcher, designer and data scientist write only their own folders; the tester changes only tests.
+- The harness never asks for credentials. Never paste passwords or tokens into the chat.
+
+## Troubleshooting
+
+- Run \`./install.sh doctor\` in the harness checkout (the folder you cloned) to check versions, installed files, settings and models. Invalid settings are ignored until fixed; doctor shows why.
+- A model is missing: connect its provider with \`opencode auth login\`, or pick another profile, then restart opencode.
+- opencode starts on \`build\`, not \`lead\`: the plugin did not load, \`default_agent\` is false, or your opencode config names another default agent. Switch with \`/agents\`. Without the plugin the agents work with default settings.
+- To update, run \`git pull\` in the checkout and restart opencode.
+`, description: "User guide to the ecmwf-multi-agents harness: agents, commands, plans, review policy, settings and profiles. Use when the user asks how the harness works.", autoinvoke: false }], helperOff: "Helpers not in this list are switched off in this project: do their work yourself, also where a command or skill names them." });
 export {
   plugin_default as default
 };

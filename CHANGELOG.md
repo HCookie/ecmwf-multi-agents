@@ -11,6 +11,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+### Added
+
+- Four optional helpers, off until a settings file switches them on: `researcher` investigates
+  a hard question in depth and may run experiments in a scratch folder; `tester` tries to break
+  code with edge cases and new tests and drafts issues; `designer` writes interface specs and
+  standalone prototypes for a builder to implement; `data-scientist` answers questions about
+  datasets with scripts instead of reading the data. `lead` routes plain requests to them.
+- `agents.<id>.enabled` in user and project settings switches any helper on or off; `lead` is
+  always on. With a helper off, `lead` does its work itself; with the reviewer off nothing is
+  reviewed and `/review` says so; with `scout` off `/progress` runs on `lead`. `doctor` lists
+  the helpers that are on and off, and the file that switched each.
+
+### Changed
+
+- `lead` asks before `gh issue create`, so a tester's issue draft is filed only with your
+  approval.
+
 ## [0.7.1] - 2026-11-05
 
 ### Changed

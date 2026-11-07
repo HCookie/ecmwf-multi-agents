@@ -20,8 +20,9 @@ A multi-agent harness for [opencode](https://opencode.ai), made for ECMWF scient
 and developers.
 
 You talk to one agent, `lead`. It works out what you need, asks questions when your request is
-unclear, and hands the reading, building and checking to three helpers. Helpers run on a
-model and effort suited to its job.
+unclear, and hands the reading, building and checking to three helpers, and to four optional
+ones where a project switches them on. Each helper runs on a model and effort suited to its
+job.
 
 ## The agents
 
@@ -48,6 +49,33 @@ flowchart LR
 ```
 
 Only `lead` talks to you. Helpers never ask you questions and never hand work on.
+
+### Optional helpers
+
+Four more helpers are off until a settings file switches them on, for you or for one project:
+
+| Agent | What it does | Default model and effort |
+|---|---|---|
+| `researcher` | Deep investigation of a hard question: compares options, may run experiments in a scratch folder, writes a report | Claude Opus 5.5, max |
+| `tester` | Tries to break code with edge cases and new tests, never fixes product code, drafts issues that `lead` files only when you approve | GPT 6.1 Sol via GH Copilot, high |
+| `designer` | Interface specs, interaction flows and prototypes you open in a browser; a builder implements the agreed design | Claude Opus 5.5, high |
+| `data-scientist` | Answers questions about datasets with scripts it runs, without reading the data into its context | Claude Sonnet 5.5, high |
+
+```jsonc
+// .opencode/ecmwf-multi-agents.jsonc in a project
+{
+  "agents": {
+    "tester": { "enabled": true },
+    "data-scientist": { "enabled": true }
+  }
+}
+```
+
+You ask `lead` in plain words, as before; it hands the work to the helper that fits. `scout`,
+`builder` and the reviewer can be switched off the same way (`"enabled": false`): `lead` then
+does that work itself, and with the reviewer off nothing is reviewed and `/review` says so. The
+optional helpers come with the plugin, which every install brings; `./install.sh doctor` shows
+which helpers are on.
 
 ## Commands
 
@@ -151,9 +179,10 @@ The plugin then brings the agents, commands and skills, and makes `lead` the def
 that project only. Your own agent files, commands, skills and `default_agent` still win, with
 two exceptions. The plugin replaces `/review` and `/progress` after opencode has loaded the
 command files, so they answer in your session; a command file of your own with either name is
-not used. And the settings decide the model, effort and step limit of `lead`, `scout`, `builder`
-and `reviewer`, and `lead`'s review line and helper limit: an agent file of yours with one of
-those names can change its other fields, but change these in the settings file. The settings files work as
+not used. And the settings decide which helpers are on, the model, effort and step limit of
+every harness agent, and `lead`'s review line, helper limit and helper list: an agent file of
+yours with one of those names can change its other fields, but change these in the settings
+file. The settings files work as
 below. To update, change the version in the line (or `git pull` the
 checkout) and restart opencode; an entry without a version is updated only by
 `opencode plugin update`.
@@ -175,13 +204,18 @@ in `.opencode/ecmwf-multi-agents.jsonc`.
   "profile": "default",
   // Helpers lead may run at once: an integer of at least 1, default 4.
   "max_helper_slots": 4,
-  // Optional per-agent overrides, applied after the profile: model, effort and steps.
+  // Optional per-agent overrides, applied after the profile: enabled (helpers only), model,
+  // effort and steps.
   "agents": {
     "builder": { "effort": "xhigh" },
-    "reviewer": { "model": "openai/gpt-6.1-sol", "effort": "high" }
+    "reviewer": { "model": "openai/gpt-6.1-sol", "effort": "high" },
+    "tester": { "enabled": true }
   }
 }
 ```
+
+`enabled` switches a helper on or off; a project's file can switch on a helper your own file
+leaves off, or the other way round. `lead` is always on.
 
 Effort values are `low`, `medium`, `high`, `xhigh` and `max` (some models also offer `none`).
 The defaults are `lead` xhigh, `builder` high, `scout` and `reviewer` medium. An effort needs a
@@ -214,9 +248,11 @@ settings.
 
 ## Safety
 
-- Agents commit only when you ask. Pushing, opening a pull request and merging always ask for
-  your approval first. Answer such prompts with "Allow once".
-- Helpers cannot commit, push or rewrite git history.
+- Agents commit only when you ask. Pushing, opening a pull request, merging and filing an
+  issue always ask for your approval first. Answer such prompts with "Allow once".
+- Helpers cannot commit, push or rewrite git history. The researcher, designer and data
+  scientist write only their own folders in `.ecmwf-multi-agents/`; the tester changes only
+  tests, and `lead` checks what each of them changed.
 - The harness never asks for, prints or stores credentials.
 
 ## Development

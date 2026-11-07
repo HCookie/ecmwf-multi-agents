@@ -25,7 +25,9 @@
   // - routing 100, lead-all: an optional helper's line in lead's helper list, and lead's prompt
   //   with every such line and the line for helpers that are off (ADR 0005); lead-all is the
   //   measured size of that largest prompt, rounded up to the next 50. Measured 2341.
-  "budgets": { "lead": 2050, "helper": 750, "command": 500, "skill": 1500, "routing": 100, "lead-all": 2350 },
+  // - skill 1500 -> 1750: the users' guide to the optional helpers and to switching helpers on
+  //   and off. Measured 1736; the guide is loaded only when the user asks how the harness works.
+  "budgets": { "lead": 2050, "helper": 750, "command": 500, "skill": 1750, "routing": 100, "lead-all": 2350 },
 
   // Named lists of {action, resource}. A permission entry {"use": name, "effect": e}
   // expands to one rule per item, all with effect e.
