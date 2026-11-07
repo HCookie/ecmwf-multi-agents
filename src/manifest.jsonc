@@ -24,9 +24,9 @@
   //   on a completion, even one that arrives during the lookup. Measured 1492.
   // - routing 100, lead-all: an optional helper's line in lead's helper list, and lead's prompt
   //   with every such line and the line for helpers that are off (ADR 0005); lead-all is the
-  //   measured size of that largest prompt, rounded up to the next 50. Measured 2376, with
-  //   the tester's note that its failing tests are kept and lead's rule never to review its own
-  //   work while the reviewer is off.
+  //   measured size of that largest prompt, rounded up to the next 50. Measured 2395, with
+  //   the tester's note that its failing tests are kept, lead's rule never to review its own
+  //   work while the reviewer is off, and the data scientist's folder named in its line.
   // - skill 1500 -> 1750: the users' guide to the optional helpers and to switching helpers on
   //   and off. Measured 1736; the guide is loaded only when the user asks how the harness works.
   "budgets": { "lead": 2050, "helper": 750, "command": 500, "skill": 1750, "routing": 100, "lead-all": 2400 },
@@ -273,7 +273,7 @@
       "budget": "helper",
       "steps": 60,
       "optional": true,
-      "routing": "answers a question about datasets with scripts it runs, never reading the data itself; it changes no project file (check `git status`). Give it the data's paths; it downloads nothing, so fetch new data only when the user agrees.",
+      "routing": "answers questions about datasets with scripts it runs, never reading the data itself. Its scripts and results belong in `.ecmwf-multi-agents/data/`, not a project file; it changes nothing else (check `git status`). Give it the data's paths; it downloads nothing, so fetch data only when the user agrees.",
       // Edits are denied except its data folder; the input data stays read-only.
       "permissions": [
         { "action": "edit", "resource": "*", "effect": "deny" },

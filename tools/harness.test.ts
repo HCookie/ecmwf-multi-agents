@@ -67,6 +67,23 @@ describe("the optional helpers", () => {
     expect(agent("tester").routing).toContain("failing tests");
   });
 
+  test("lead's routing line names the work folder of each helper that writes one, so a brief never sends its files elsewhere", () => {
+    for (const [id, folder] of [
+      ["tester", ".ecmwf-multi-agents/issues/"],
+      ["designer", ".ecmwf-multi-agents/design/"],
+      ["data-scientist", ".ecmwf-multi-agents/data/"],
+    ] as const) {
+      expect([id, agent(id).routing?.includes(`\`${folder}\``)]).toEqual([id, true]);
+    }
+    expect(agent("data-scientist").routing).toContain("not a project file");
+  });
+
+  test("the researcher matches its depth to the brief and keeps its report current, so a cut-off still leaves its findings", () => {
+    const prompt = agent("researcher").prompt;
+    expect(prompt).toContain("Match the depth to the brief");
+    expect(prompt).toContain("so a cut-off still leaves them");
+  });
+
   test("no helper asks the user, hands work on, loads the harness's skills or uses lead's helper tools", () => {
     for (const id of HELPERS) {
       const rules = agent(id).permissions;

@@ -340,6 +340,29 @@ describe("every case's setup on the fixture", () => {
   });
 });
 
+describe("data-question", () => {
+  test("checks that the computation was kept as a script in the data scientist's folder", () => {
+    const item = CASES.find((candidate) => candidate.id === "data-question")!;
+    expect(item.checks.map((check) => check.id)).toEqual(["data-scientist-sessions", "statistics", "data-script", "not-read-whole", "no-changes"]);
+    const script = item.checks.find((check) => check.id === "data-script")!;
+    const run = (changedFiles: string[]) => script.run({ changedFiles } as never);
+    expect(run([".ecmwf-multi-agents/data/station-means/means.py", ".ecmwf-multi-agents/data/station-means/sources.md"])).toMatchObject({ pass: true });
+    expect(run([".ecmwf-multi-agents/data/station-means/sources.md"])).toMatchObject({ pass: false });
+    expect(run([])).toMatchObject({ pass: false });
+  });
+
+  test("accepts a negative mean written with a hyphen or a typographic minus sign, never without its sign", () => {
+    const item = CASES.find((candidate) => candidate.id === "data-question")!;
+    const statistics = item.checks.find((check) => check.id === "statistics")!;
+    const table = (minus: string) =>
+      `| STN-11 | 8,637 | 8.4 °C |\n| STN-12 | 8,638 | 14.1 °C |\n| STN-13 | 8,633 | ${minus}2.7 °C |`;
+    const run = (answer: string) => statistics.run({ answer, answers: [answer], reports: [] } as never);
+    expect(run(table("-"))).toMatchObject({ pass: true });
+    expect(run(table("\u2212"))).toMatchObject({ pass: true });
+    expect(run(table(""))).toEqual({ pass: false, detail: "missing STN-13 mean" });
+  });
+});
+
 describe("the generated readings of data-question", () => {
   test("are the same every time, a year of hours for three stations, and Python finds the expected answer", () => {
     const first = readingsCsv();

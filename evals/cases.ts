@@ -653,9 +653,11 @@ export const CASES: EvalCase[] = [
         "the answer gives each station's number of valid readings and their mean",
         READINGS.stations.flatMap((station) => [
           { label: `${station.id} valid`, any: [String(station.valid), station.valid.toLocaleString("en-US")] },
-          { label: `${station.id} mean`, any: [station.mean.toFixed(1)] },
+          // A reply may write a negative number with the typographic minus sign, U+2212.
+          { label: `${station.id} mean`, any: [station.mean.toFixed(1), station.mean.toFixed(1).replace("-", "\u2212")] },
         ]),
       ),
+      workFiles("data-script", "the computation was kept as a script in the data scientist's folder", /^\.ecmwf-multi-agents\/data\/[^/]+\/.+\.(?:py|sh|sql|r|jl)$/i),
       notReadWhole(/readings-2025\.csv$/),
       noChanges(WORK_FILES, "no project file changed (work files allowed)"),
     ],
