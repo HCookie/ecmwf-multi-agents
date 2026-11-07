@@ -7,7 +7,7 @@
     "scout": { "model": "anthropic/claude-sonnet-5-5", "effort": "medium" },
     "builder": { "model": "anthropic/claude-sonnet-5-5", "effort": "high" },
     "reviewer": { "model": "github-copilot/gpt-6.1-sol", "effort": "medium" },
-    "researcher": { "model": "anthropic/claude-opus-5-5", "effort": "max" },
+    "researcher": { "model": "anthropic/claude-opus-5-5", "effort": "xhigh" },
     "tester": { "model": "github-copilot/gpt-6.1-sol", "effort": "high" },
     "designer": { "model": "anthropic/claude-opus-5-5", "effort": "high" },
     "data-scientist": { "model": "anthropic/claude-sonnet-5-5", "effort": "high" }

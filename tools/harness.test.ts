@@ -145,25 +145,34 @@ describe("the optional helpers", () => {
   });
 });
 
+describe("lead", () => {
+  test("asks the user only through the question tool, and states each option's pros and cons in a few words", () => {
+    const asking = /## Asking the user\n\n([\s\S]*?)\n\n##/.exec(agent("lead").prompt)?.[1] ?? "";
+    expect(asking).toContain("Ask the user through the question tool, never in your reply");
+    expect(asking).toContain("its pros and cons");
+    expect(asking).toContain("recommendation first");
+  });
+});
+
 describe("profiles", () => {
   const models = (profile: string) =>
     Object.fromEntries(OPTIONAL.map((id) => [id, harness.profiles.find((item) => item.id === profile)!.agents[id]]));
 
   test("give the optional helpers the models ADR 0005 names", () => {
     expect(models("default")).toEqual({
-      researcher: { model: "anthropic/claude-opus-5-5", effort: "max" },
+      researcher: { model: "anthropic/claude-opus-5-5", effort: "xhigh" },
       tester: { model: "github-copilot/gpt-6.1-sol", effort: "high" },
       designer: { model: "anthropic/claude-opus-5-5", effort: "high" },
       "data-scientist": { model: "anthropic/claude-sonnet-5-5", effort: "high" },
     });
     expect(models("anthropic")).toEqual({
-      researcher: { model: "anthropic/claude-opus-5-5", effort: "max" },
+      researcher: { model: "anthropic/claude-opus-5-5", effort: "xhigh" },
       tester: { model: "anthropic/claude-opus-5-5", effort: "high" },
       designer: { model: "anthropic/claude-opus-5-5", effort: "high" },
       "data-scientist": { model: "anthropic/claude-sonnet-5-5", effort: "high" },
     });
     expect(models("copilot")).toEqual({
-      researcher: { model: "github-copilot/claude-opus-5.5", effort: "max" },
+      researcher: { model: "github-copilot/claude-opus-5.5", effort: "xhigh" },
       tester: { model: "github-copilot/gpt-6.1-sol", effort: "high" },
       designer: { model: "github-copilot/claude-opus-5.5", effort: "high" },
       "data-scientist": { model: "github-copilot/claude-sonnet-5.5", effort: "high" },

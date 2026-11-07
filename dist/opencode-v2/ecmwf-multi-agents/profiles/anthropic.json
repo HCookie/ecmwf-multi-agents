@@ -20,7 +20,7 @@
     },
     "researcher": {
       "model": "anthropic/claude-opus-5-5",
-      "effort": "max"
+      "effort": "xhigh"
     },
     "tester": {
       "model": "anthropic/claude-opus-5-5",

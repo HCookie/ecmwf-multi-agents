@@ -199,7 +199,7 @@
             },
             "effort": {
               "title": "Reasoning effort",
-              "description": "Reasoning effort for the model of researcher. Common values: low, medium, high, xhigh and max; some models also take none. Default: max, from the default profile. It applies only when researcher has a model, from the profile or from this entry, so it has no effect under the inherit profile unless this entry also names a model. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "description": "Reasoning effort for the model of researcher. Common values: low, medium, high, xhigh and max; some models also take none. Default: xhigh, from the default profile. It applies only when researcher has a model, from the profile or from this entry, so it has no effect under the inherit profile unless this entry also names a model. No \"#\" and no spaces. Leave it out to use the profile's choice.",
               "type": "string",
               "minLength": 1,
               "pattern": "^[^#\\s]+$"

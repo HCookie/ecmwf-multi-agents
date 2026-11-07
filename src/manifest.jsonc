@@ -24,7 +24,7 @@
   //   on a completion, even one that arrives during the lookup. Measured 1492.
   // - routing 100, lead-all: an optional helper's line in lead's helper list, and lead's prompt
   //   with every such line and the line for helpers that are off (ADR 0005); lead-all is the
-  //   measured size of that largest prompt, rounded up to the next 50. Measured 2395, with
+  //   measured size of that largest prompt, rounded up to the next 50. Measured 2396, with
   //   the tester's note that its failing tests are kept, lead's rule never to review its own
   //   work while the reviewer is off, and the data scientist's folder named in its line.
   // - skill 1500 -> 1750: the users' guide to the optional helpers and to switching helpers on

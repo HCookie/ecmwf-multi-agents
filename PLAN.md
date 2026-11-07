@@ -720,7 +720,7 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
 
 | Agent | Writes | Default profile |
 |---|---|---|
-| `researcher` | `.ecmwf-multi-agents/notes/`, `scratch/<slug>/` | Claude Opus 5.5, max |
+| `researcher` | `.ecmwf-multi-agents/notes/`, `scratch/<slug>/` | Claude Opus 5.5, xhigh |
 | `tester` | test files and scratch probes, issue drafts in `issues/` | GPT 6.1 Sol through Copilot, high |
 | `designer` | `.ecmwf-multi-agents/design/<slug>/` | Claude Opus 5.5, high |
 | `data-scientist` | `.ecmwf-multi-agents/data/<slug>/` | Claude Sonnet 5.5, high |
@@ -785,10 +785,15 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   `researcher-compare` passed in 15 minutes ($3.75); `data-question` kept its scripts in the
   data folder and answered correctly, but failed a check that did not accept the typographic
   minus sign of "−2.7", now fixed and passing on that answer
-- [ ] Researcher cost: `researcher-compare` costs $3.50 and 15 minutes in the researcher
+- [x] Tiago: Researcher cost: `researcher-compare` costs $3.50 and 15 minutes in the researcher
   (Claude Opus 5.5 at max effort, 35 requests) for a small experiment; it searched the web six
-  times and downloaded two WMO guides. Measure the case at effort `high`, or with a step
-  limit below 80, and choose with the owner
+  times and downloaded two WMO guides. The owner chose effort `xhigh`, `lead`'s, in every
+  profile; not measured on real models
+- [x] Tiago: `lead` asks the user through the question tool, never in its reply, and gives each
+  option's consequences in a few words, its pros and cons. To fit the budget, two sentences
+  lost words that added no instruction; the one about `/review` and `/progress` no longer says
+  a scout answers, which is not so with `scout` off. `lead` 2049 tokens (2050),
+  `lead-all` 2396 (2400)
 - [ ] Tiago: Release 0.8.0 when asked
 
 Exit: `make check` and the integration suites pass on 2.2.5; each new helper and each switched

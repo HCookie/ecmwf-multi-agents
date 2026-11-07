@@ -56,7 +56,7 @@ Four more helpers are off until a settings file switches them on, for you or for
 
 | Agent | What it does | Default model and effort |
 |---|---|---|
-| `researcher` | Deep investigation of a hard question: compares options, may run experiments in a scratch folder, writes a report | Claude Opus 5.5, max |
+| `researcher` | Deep investigation of a hard question: compares options, may run experiments in a scratch folder, writes a report | Claude Opus 5.5, xhigh |
 | `tester` | Tries to break code with edge cases and new tests, never fixes product code, drafts issues that `lead` files only when you approve | GPT 6.1 Sol via GH Copilot, high |
 | `designer` | Interface specs, interaction flows and prototypes you open in a browser; a builder implements the agreed design | Claude Opus 5.5, high |
 | `data-scientist` | Answers questions about datasets with scripts it runs, without reading the data into its context | Claude Sonnet 5.5, high |

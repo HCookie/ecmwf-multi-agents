@@ -27,6 +27,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 - `lead` asks before `gh issue create`, so a tester's issue draft is filed only with your
   approval.
+- `lead` asks you its questions through the question tool, never in its reply, and gives each
+  option's pros and cons in a few words.
 
 ## [0.7.1] - 2026-11-05
 

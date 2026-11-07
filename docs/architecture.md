@@ -546,16 +546,16 @@ plugin write it under that name.
 
 | Profile | `researcher` | `tester` | `designer` | `data-scientist` |
 |---|---|---|---|---|
-| `default` | Claude Opus 5.5, max | GPT 6.1 Sol through GitHub Copilot, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
-| `anthropic` | Claude Opus 5.5, max | Claude Opus 5.5, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
-| `copilot` | Claude Opus 5.5, max | GPT 6.1 Sol, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
+| `default` | Claude Opus 5.5, xhigh | GPT 6.1 Sol through GitHub Copilot, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
+| `anthropic` | Claude Opus 5.5, xhigh | Claude Opus 5.5, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
+| `copilot` | Claude Opus 5.5, xhigh | GPT 6.1 Sol, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
 | `inherit` | session model | session model | session model | session model |
 
 `lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper
 ones. The reviewer runs on a different model family, to catch mistakes the others share,
 except in `anthropic`, which has no other family and gives it the strongest model instead.
 `tester` follows the reviewer, for the same reason. `researcher` gets the strongest model at
-the most effort, since depth is its job; `designer` the strongest model, and `data-scientist`
+`lead`'s effort, since depth is its job; `designer` the strongest model, and `data-scientist`
 the builder's. `copilot` reaches every model through GitHub Copilot.
 
 Per-agent overrides from the settings file apply after the profile. An effort applies only
