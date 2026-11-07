@@ -955,3 +955,33 @@ The harness moved its opencode 2 pin from 2.0.29 to 2.2.5 after 0.7.0. Checked w
   core/src/session/runner/llm.ts:37-41`), and the managed policy action `provider.use` that the
   eval sandboxes use is unchanged (`v2.2.5: schema/src/config/policy.ts:18`).
 
+## Addendum: switching helpers on and off
+
+Questions behind optional and switchable helpers (ADR 0005), checked in the `v2.2.5` source.
+
+1. Can a plugin take an agent away, whatever brought it? Yes. The agent editor has
+   `remove(id)`, which deletes the agent from the map every later transform and every reader
+   sees (`v2.2.5: core/src/agent.ts:32-38` and `:86-88`). opencode's own loader uses it for an
+   agent a file or config marks `disabled: true` (`core/src/config/plugin/agent.ts:96-99`), and
+   the loader runs before the plugin's late transform, so the late transform can remove an
+   agent that came from a file, the central config or the plugin's own registration.
+2. Does a removed helper leave `lead`'s choices? Yes. The `subagent` tool lists only agents
+   in the agent list that are not primary, not hidden and not denied to the calling agent
+   (`core/src/tool/plugin/subagent.ts:294-306`); a removed agent is not in the list. An allow
+   rule naming an agent that does not exist lists nothing.
+3. Can a helper use opencode's browser tools? No. The browser plugin denies `browser *` and
+   the browser skill to every agent, and an attachment allows them only for the session the
+   desktop browser attached to (`plugin-browser/src/connection.ts:27-50`); each tool call is
+   sent to the attachment of its own session (`plugin-browser/src/tools.ts:25`). A helper runs
+   in a child session that never has one, so an allow rule for a helper would show tools that
+   cannot work. A helper can still check a page through a Playwright MCP server the user has
+   configured, reached through Code Mode while `execute` is not denied
+   (`core/src/tool.ts:274`), or with a headless browser from the shell; the `read` tool hands
+   an image file to the model (`core/src/tool/plugin/read.ts:205-209`).
+4. Can a plugin command answer without a model turn? Yes. `session.synthetic` takes
+   `resume: false`, which records the message without waking the session
+   (`core/src/session/session.ts:286-325`); the plugin context passes the call through
+   unchanged (`core/src/plugin/host.ts:628`), and opencode's own Plan mode plugin uses it for
+   its reminders (`core/src/plugin/plan.ts:67`). The message is a notice the user sees and the
+   agent reads at its next turn.
+

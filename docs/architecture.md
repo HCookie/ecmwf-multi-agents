@@ -18,9 +18,9 @@ answers land in `docs/research/` and `docs/adr/`.
 3. Every hand-off is an explicit brief. A helper starts with no memory of the conversation; the
    brief is all it knows. A later message from `lead` or the user amends the brief, and the
    helper's report still answers it: every DONE WHEN item, plus what the amendment changed.
-4. Few agents, each with one job. How hard an agent thinks is a setting, its model and effort,
-   not a separate agent. A failed task gets one more try with the gap stated, then goes to the
-   user.
+4. Few agents on by default, each with one job; specialists are switched on where a project
+   needs them (ADR 0005). How hard an agent thinks is a setting, its model and effort, not a
+   separate agent. A failed task gets one more try with the gap stated, then goes to the user.
 5. Reads run in parallel freely. Writes run in parallel only on disjoint files.
 6. Memory lives in files. Plans, notes and summaries survive compaction and new sessions.
    Long findings go to a file; only a path and a short summary come back.
@@ -38,10 +38,20 @@ answers land in `docs/research/` and `docs/adr/`.
 | `scout` | subagent | Read-only lookups and investigations in code, docs and the web, from "where is X" to "why does X happen"; long findings go to a notes file | 30 |
 | `builder` | subagent | One clearly specified change, from a small edit to a hard fix, then its checks; never commits | 60 |
 | `reviewer` | subagent | Independent APPROVE or REJECT on a plan or a change | 30 |
+| `researcher` | subagent, optional | Deep investigation of a hard question: compares options, may run experiments in a scratch folder, writes a report | 80 |
+| `tester` | subagent, optional | Tries to break a change: edge cases, adversarial and new tests, never product code; drafts issues | 60 |
+| `designer` | subagent, optional | UI specs, interaction flows and standalone prototypes; a builder implements them | 60 |
+| `data-scientist` | subagent, optional | Answers questions about datasets with scripts it runs, never by reading the data into its context | 60 |
 
 Steps cap the number of model turns a helper may take. They act as a cost limit. Each agent
 also gets a model and an effort from the active profile (see Profiles), and users can change
 `model`, `effort` and `steps` per agent in the settings file.
+
+Every helper can be switched on or off per project (see Settings); `lead` is always on. The
+optional helpers are off until a settings file switches them on, and the others are on until
+one switches them off. A helper that is off does not exist in the session: `lead`'s
+instructions do not name it, its delegation tool does not list it, and `lead` does its work
+itself (see Routing).
 
 ### Permissions
 
@@ -49,22 +59,43 @@ Rules are ordered and the last matching rule wins. opencode places agent rules a
 user's own rules, so an agent rule overrides the user's policy in both directions; the plugin
 keeps that order for the agents it registers (see [Registration](#registration)). The harness
 therefore adds mostly `deny` rules, and only these deliberate `allow` and `ask` rules: `lead`
-may ask questions and delegate to the three helpers; `lead` asks before publishing or
-destructive git commands; `scout` may run a short list of read-only inspection commands and
-write its notes folder; the reviewer may read pull requests. One consequence: a user who
-denies `git push` globally gets an approval prompt in `lead` instead.
+may ask questions and delegate to the harness's helpers; `lead` asks before publishing or
+destructive git commands and before filing an issue; `scout` may run a short list of
+read-only inspection commands and write its notes folder; `researcher`, `designer` and
+`data-scientist` may write their own work folders; the reviewer may read pull requests. One
+consequence: a user who denies `git push` globally gets an approval prompt in `lead` instead.
 
 | Capability | lead | scout | builder | reviewer |
 |---|---|---|---|---|
 | Read, search | user policy | user policy | user policy | user policy |
 | Edit files | user policy | only `.ecmwf-multi-agents/notes/` | user policy | deny |
-| Shell | user policy, with approval for push, PR, merge and history rewrites | read-only commands only | user policy, git and `gh` writes denied | user policy, git and `gh` writes denied |
+| Shell | user policy, with approval for push, PR, merge, history rewrites and `gh issue create` | read-only commands only | user policy, git and `gh` writes denied | user policy, git and `gh` writes denied |
 | Web fetch and search | user policy | user policy | user policy | user policy |
-| Delegate | the three helpers only | deny | deny | deny |
+| Delegate | the harness's helpers only | deny | deny | deny |
 | Ask the user | allow | deny | deny | deny |
 | Harness skills (`ecmwf-multi-agents-*`) | user policy | deny | deny | deny |
 | Code Mode | user policy | deny | user policy | deny |
 | Helper tools (`helpers_status`, `helpers_steer`, `helpers_cancel`) | user policy | deny | deny | deny |
+
+The optional helpers:
+
+| Capability | researcher | tester | designer | data-scientist |
+|---|---|---|---|---|
+| Read, search | user policy | user policy | user policy | user policy |
+| Edit files | only `.ecmwf-multi-agents/notes/` and `scratch/` | user policy; its prompt limits it to test files, scratch probes and `issues/` | only `.ecmwf-multi-agents/design/` | only `.ecmwf-multi-agents/data/` |
+| Shell | user policy, git and `gh` writes denied | user policy, git and `gh` writes denied | user policy, git and `gh` writes denied | user policy, git and `gh` writes denied |
+| Web fetch and search | user policy | user policy | user policy | user policy |
+| Delegate, ask the user, harness skills, helper tools | deny | deny | deny | deny |
+| Code Mode | user policy | user policy | user policy | user policy |
+
+These four may run code, so their folders hold through their prompts and `lead`'s check of
+the changed files (`git status`) after each report, not through the shell. `tester` may edit
+like `builder` because a project's test files can be anywhere; `lead` rejects a report whose
+changes reach product code. No helper has a browser rule: opencode's browser tools work only
+in the session a desktop browser attached to, never in a helper's
+(`docs/research/opencode-v2.md`, Addendum: switching helpers on and off). `designer` checks a
+prototype through a Playwright MCP server the user configured, through Code Mode, or with a
+headless browser from the shell, and reads the screenshot.
 
 Files outside the project follow opencode's default, since the harness sets no rule for them:
 opencode 2.0.16 asks before an agent reads or edits one, and opencode 2.0.28 asks for no agent
@@ -111,6 +142,22 @@ Choosing a helper:
   investigation of unfamiliar code or several sources (why does X happen).
 - `builder`: any change whose files and checks are known, from a small edit to a hard fix.
 - `reviewer`: a verdict on a plan or a change, as the review policy says.
+- `researcher`, when on: a hard question that needs depth, a comparison of options, or an
+  experiment to settle it; more costly than a scout, so not for lookups.
+- `tester`, when on: trying to break a change or a piece of code. `lead` checks that it
+  changed only test files, shows its issue drafts to the user, and files one with
+  `gh issue create` only when the user approves.
+- `designer`, when on: a UI or interaction to design before it is built. `lead` takes its open
+  questions to the user and briefs a builder with the agreed spec.
+- `data-scientist`, when on: a question about a dataset, answered with scripts.
+
+`lead`'s instructions list only the helpers that are on. The generated prompt lists the three
+default helpers, one line each. The plugin removes the line of a default helper that is off,
+adds the routing line of each optional helper that is on (the manifest's `routing` field), and,
+when any default helper is off, adds the manifest's `helperOff` line, which tells `lead` to do
+the work of a helper it does not see itself, also where a command or skill names that helper.
+With a helper off, its share of the work goes to `lead`: reading for `scout`, changes for
+`builder`, and no independent review for `reviewer` (the policy becomes `never`).
 
 Escalation on a failed or partial task: `builder` again with the gap stated exactly, then the
 user. The retry's CONTEXT says what the earlier attempt changed and why it fell short; the
@@ -222,6 +269,52 @@ NOTES: at most three non-blocking suggestions.
 CHECKED: what was examined and which commands ran.
 ```
 
+Researcher:
+
+```text
+ANSWER: the answer or recommendation, at most five lines.
+FINDINGS: the facts behind it, each with its evidence: `path:line`, URL or experiment.
+OPTIONS: the options compared and their trade-offs, when the brief asks for a choice.
+EXPERIMENTS: each command run, in which folder, and its result.
+CONFIDENCE: high, medium or low, and what would change the answer.
+NOTES: path to the report file, if one was written.
+NOT CHECKED: what was out of reach or skipped.
+```
+
+Tester:
+
+```text
+STATUS: DONE, PARTIAL or BLOCKED.
+FINDINGS: one per problem: severity, what breaks, how to reproduce, issue draft path.
+TESTS: one line per test file added or changed, and what it covers.
+CHECKS: one line per command: pass or fail, with the key failure line.
+NOT TESTED: what was not tried.
+```
+
+Designer:
+
+```text
+STATUS: DONE, PARTIAL or BLOCKED.
+SPEC: path to the spec.
+PROTOTYPE: path to the prototype and how to open it.
+SCREENSHOTS: paths, or why there are none.
+DECISIONS: the design choices made and why.
+QUESTIONS: choices for the user.
+NOT CHECKED: what was not verified.
+```
+
+Data scientist:
+
+```text
+ANSWER: the direct answer, at most five lines, with numbers and units.
+RESULTS: the key numbers or a small table.
+FIGURES: paths to figures.
+SCRIPTS: paths, and the command that re-runs each.
+INPUTS: the data used: paths, sizes and what was checked about them.
+CAVEATS: limits, assumptions and data quality issues.
+NOT CHECKED: what was out of reach or skipped.
+```
+
 A background helper's report arrives wrapped by opencode (`<subagent ... state="completed">`
 with the report inside; `state="error"` or `state="cancelled"` when it did not finish). `lead` reads the inside as the
 helper's report.
@@ -239,6 +332,12 @@ report (24 to 30% cheaper when measured before the move to opencode 2). Without 
 the helper in a child session, and opencode wakes `lead` with the report as a `<subagent ...>`
 message, which `lead` relays briefly, without re-running its checks. Either way `lead` acts on a
 REJECT or on a plan's state only when the user asks.
+
+When the command's helper is switched off, the plugin's command does without it: `/progress`
+runs on `lead`, in the user's session, from the same text; `/review` posts a notice that the
+reviewer is off in this project and names the setting that switches it on, with no model turn
+(`session.synthetic` with `resume: false`). `/onboard` follows `lead`'s rule for helpers that
+are off: with `scout` off, `lead` does the reading itself.
 
 A native command for a helper cannot answer inline: it would switch the session to the helper for
 good, so the user's next message would go to the helper, and the helper would see the whole
@@ -288,8 +387,8 @@ held report wakes `lead` once.
    whose file sets overlap (the rule under Routing): a ready task that shares a file with a
    running or taken task waits for it. The plan's `Parallel` line names the sets that may
    run together.
-2. Brief each taken task's agent (`builder` or `scout`) with the task's files, criteria and
-   checks. When two or more are taken, or the user may want to keep talking, hand them off
+2. Brief each taken task's agent (`builder`, `scout`, or another helper that is on) with the
+   task's files, criteria and checks; a task whose agent is off is `lead`'s own. When two or more are taken, or the user may want to keep talking, hand them off
    in the background; otherwise one task runs in the foreground, so its result comes back in
    the same turn.
 3. A question from the user is answered first, even if a completion arrives while `lead`
@@ -327,7 +426,9 @@ On REJECT, the builder fixes the blockers and the reviewer checks again, at most
 After that, `lead` takes the open blockers to the user. `/review` works under every policy.
 
 The active policy appears in the `lead` prompt as one line, `Review policy: <value>`. The
-generator writes `auto`; the plugin rewrites the line from the settings file.
+generator writes `auto`; the plugin rewrites the line from the settings file. With the
+reviewer switched off the line says `never`, and a settings file that chose another policy
+gets a warning.
 
 ## Work files
 
@@ -338,7 +439,11 @@ All harness files in a project live under `.ecmwf-multi-agents/` at the top of t
 |---|---|
 | `plans/<slug>.md` | Plans with task checklists and a log |
 | `context/onboard.md` | Onboarding summary, stamped with the commit it describes |
-| `notes/<slug>.md` | Long findings from `scout` |
+| `notes/<slug>.md` | Long findings from `scout`, reports from `researcher` |
+| `scratch/<slug>/` | Experiments from `researcher`, throwaway probes from `tester` |
+| `issues/<slug>.md` | Issue drafts from `tester`, filed by `lead` only after the user approves |
+| `design/<slug>/` | Specs, prototypes and screenshots from `designer` |
+| `data/<slug>/` | Scripts, results, figures and the data sources from `data-scientist` |
 
 Before writing the first file, `lead` makes sure `.ecmwf-multi-agents/` is listed in the file
 that `git rev-parse --git-path info/exclude` names. The folder then never shows up in
@@ -386,12 +491,19 @@ Changes take effect when opencode restarts.
   "max_helper_slots": 4,      // concurrent helpers, integer at least 1
   "agents": {                 // per-agent overrides, applied after the profile
     "builder": { "effort": "xhigh" },
-    "reviewer": { "model": "openai/gpt-6.1-sol", "effort": "high", "steps": 40 }
+    "reviewer": { "model": "openai/gpt-6.1-sol", "effort": "high", "steps": 40 },
+    "tester": { "enabled": true }
   }
 }
 ```
 
-An `agents` entry may set `model` (`provider/model`), `effort` and `steps`. An override
+An `agents` entry may set `enabled`, `model` (`provider/model`), `effort` and `steps`.
+`enabled` switches a helper on or off: `true` or `false`, merged like the other fields, so a
+project's file can switch on a helper the user's file leaves off, or the other way round.
+`scout`, `builder` and `reviewer` default to on, `researcher`, `tester`, `designer` and
+`data-scientist` to off. `enabled` is refused for `lead`, which is always on; the file is then
+ignored like any invalid file. The other fields of a helper that is off are kept and apply when
+it is switched on. An override
 `model` replaces the profile's model and effort together, so the agent runs at the effort the
 entry names, or at the model's own default when it names none. An override `effort` alone
 applies to the profile's model. `steps` replaces the agent's step limit.
@@ -406,8 +518,9 @@ More slots can run more builders, databases, dev servers and builds on the same 
 The generator writes a JSON Schema for this file; the plugin validates with the same patterns.
 A file with unknown keys or invalid values is ignored as a whole and reported on standard
 error and through the plugin's RPC, which the TUI entry shows as a warning toast (see
-[The plugin](#the-plugin)). `install.sh doctor` checks the review and profile values and lists
-the problems the plugin found. There is no
+[The plugin](#the-plugin)). `install.sh doctor` checks the review and profile values, shows
+which helpers are on and off and the file that chose each, and lists the problems the plugin
+found. There is no
 setting that returns a single agent to the session model; the `inherit` profile does that for
 all agents.
 
@@ -426,10 +539,19 @@ plugin write it under that name.
 | `copilot` | Claude Opus 5.5, xhigh | Claude Sonnet 5.5, medium | Claude Sonnet 5.5, high | GPT 6.1 Sol, medium |
 | `inherit` | session model | session model | session model | session model |
 
+| Profile | `researcher` | `tester` | `designer` | `data-scientist` |
+|---|---|---|---|---|
+| `default` | Claude Opus 5.5, max | GPT 6.1 Sol through GitHub Copilot, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
+| `anthropic` | Claude Opus 5.5, max | Claude Opus 5.5, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
+| `copilot` | Claude Opus 5.5, max | GPT 6.1 Sol, high | Claude Opus 5.5, high | Claude Sonnet 5.5, high |
+| `inherit` | session model | session model | session model | session model |
+
 `lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper
 ones. The reviewer runs on a different model family, to catch mistakes the others share,
 except in `anthropic`, which has no other family and gives it the strongest model instead.
-`copilot` reaches every model through GitHub Copilot.
+`tester` follows the reviewer, for the same reason. `researcher` gets the strongest model at
+the most effort, since depth is its job; `designer` the strongest model, and `data-scientist`
+the builder's. `copilot` reaches every model through GitHub Copilot.
 
 Per-agent overrides from the settings file apply after the profile. An effort applies only
 while the agent has a model, from the profile or from the same settings entry, so under
@@ -467,9 +589,11 @@ which re-export the two entries, for a `plugins` entry naming the checkout.
 command's frontmatter and template, and each skill's frontmatter and text, taken from the same
 emitter that writes `dist/opencode-v2/`. During setup, before anything else, it registers:
 
-- every agent, with `agent.transform` and `update`, converted as opencode's loader converts an
-  agent file: the model `provider/model#variant` as a model reference, and `~` and `$HOME`
-  expanded in the resources of `read`, `edit` and `external_directory` rules;
+- `lead` and every helper that is on, with `agent.transform` and `update`, converted as
+  opencode's loader converts an agent file: the model `provider/model#variant` as a model
+  reference, and `~` and `$HOME` expanded in the resources of `read`, `edit` and
+  `external_directory` rules. The optional helpers have no generated file and no central
+  config entry, so this registration is the only way they arrive;
 - `lead` as the default agent, unless the settings say `"default_agent": false`;
 - every skill, with `skill.transform` and `add`, at the path of the generated `SKILL.md` next
   to the plugin folder (`../../skills/<id>/SKILL.md`);
@@ -490,8 +614,9 @@ the harness also installed as files, the registration is harmless: same content,
 win. Two things win over files and config, with or without registration: `/review` and
 `/progress`, which the plugin registers again after the command files, and the settings, which
 the late agent transform applies over every agent with a harness name (model, effort, step
-limit, and `lead`'s review line and helper limit). A test compares the agents, commands and
-skills the plugin registers with those opencode loads from the generated files.
+limit, and `lead`'s review line, helper limit and helper list). The same transform removes a
+default helper that the settings switch off, whatever brought it. A test compares the agents,
+commands and skills the plugin registers with those opencode loads from the generated files.
 
 Each agent's own permission rules win over the user's config either way. opencode's loader adds
 a config's top-level `permissions` to every agent that exists when it runs, and an agent file's
@@ -520,13 +645,13 @@ The server entry registers an RPC with the id `ecmwf-multi-agents`, reachable at
 
 | Method or event | Answer |
 |---|---|
-| `doctor` | The harness version, the default agent, whether `lead` is loaded and whether it is the harness's own (`leadDefinition`, with the fields that differ in `leadChanged`), the `lead.md` files and opencode configs with a `lead` entry that could change it, `lead`'s `Review policy:` line, helper limit instruction and model, the effective settings and the file each comes from, the problems found, and the state of the plugins other than opencode's own |
+| `doctor` | The harness version, the default agent, whether `lead` is loaded and whether it is the harness's own (`leadDefinition`, with the fields that differ in `leadChanged`), the `lead.md` files and opencode configs with a `lead` entry that could change it, `lead`'s `Review policy:` line, helper limit instruction and model, which helpers are on and which off, the effective settings and the file each comes from, the problems found, and the state of the plugins other than opencode's own |
 | `problems` | The problems found since the plugin loaded, each with `notify` when it deserves a toast |
 | event `problem` | Published for each new problem |
 
 opencode does not record where an agent came from, so `doctor` compares the `lead` opencode
-loaded with the harness's own, field by field: the prompt with the review line and helper limit
-the settings write, the description, mode, `hidden`, color, and the harness's permission rules,
+loaded with the harness's own, field by field: the prompt with the review line, helper limit
+and helper list the settings write, the description, mode, `hidden`, color, and the harness's permission rules,
 which must all be there in order (rules before or after them come from the user's config and are
 expected). The model, effort and step limit are compared with what the settings choose. The
 `lead.md` files where opencode reads agent files (`leadCandidateFiles`) and the configs with an
@@ -563,7 +688,8 @@ project's config.
 The generator writes the template `dist/opencode-v2/central/`, which `files.txt` leaves out:
 
 ```text
-central/opencode.json             every agent and command inline; skills and plugin paths
+central/opencode.json             every agent but the optional ones, and every command, inline;
+                                  skills and plugin paths
 central/prompts/<agent>.md        an agent's prompt, without frontmatter
 central/prompts/commands/<id>.md  a command's template, without frontmatter
 ```
@@ -630,7 +756,9 @@ Prompt budgets, checked by the generator at about four characters per token:
 | Kind | Budget |
 |---|---|
 | `lead` prompt | 2,050 tokens |
+| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | measured, in the manifest as `leadAll` |
 | Helper prompt | 750 tokens |
+| Routing line of an optional helper | 100 tokens |
 | Command template | 500 tokens |
 | Skill | 1,500 tokens |
 

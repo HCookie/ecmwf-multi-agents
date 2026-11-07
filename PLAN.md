@@ -29,7 +29,7 @@ support waits in `TODO.md` until approved.
 | Topic | Decision |
 |---|---|
 | Name | `ecmwf-multi-agents` |
-| Agents | Four: `lead` (primary, default), `scout`, `builder`, `reviewer`. No separate deep tiers: each agent has a default effort, which users change per agent in the settings file |
+| Agents | Four on by default: `lead` (primary, default), `scout`, `builder`, `reviewer`. Four optional helpers, off by default: `researcher`, `tester`, `designer`, `data-scientist` (ADR 0005). Every helper can be switched on or off per project. No separate deep tiers: each agent has a default effort, which users change per agent in the settings file |
 | Default models | `lead`: `anthropic/claude-opus-5-5` xhigh. `builder`: `anthropic/claude-sonnet-5-5` high. `scout`: `anthropic/claude-sonnet-5-5` medium. `reviewer`: `github-copilot/gpt-6.1-sol` medium |
 | Versions | `MAJOR.MINOR.MICRO` without a `v`, single source in `VERSION`, tag equals version; one step: `make release X.Y.Z` |
 | Profiles | `default` (above), `anthropic` (Anthropic API only), `copilot` (GitHub Copilot only), `inherit` (session model everywhere). ECMWF's internal endpoint deferred, see `TODO.md` |
@@ -37,7 +37,7 @@ support waits in `TODO.md` until approved.
 | Review policy | `auto` (default), `ask`, `always`, `never`, set in the settings file |
 | Git | Agents commit only when asked. Push, PR and merge always prompt |
 | Built-in agents | Kept and reachable by the user. `lead` cannot delegate to them |
-| Work files | `.ecmwf-multi-agents/{plans,context,notes}/`, excluded through `.git/info/exclude` |
+| Work files | `.ecmwf-multi-agents/{plans,context,notes}/`, and `scratch`, `issues`, `design`, `data` for the optional helpers, excluded through `.git/info/exclude` |
 | Settings | `ecmwf-multi-agents.jsonc`, global in `~/.config/opencode/`, per project in `.opencode/`; applied by the optional plugin |
 | opencode v1 | Dropped (Phase 9). Supported up to 0.5.x on 1.18.35 and later 1.x |
 | opencode v2 | The only platform from Phase 9. Pinned (2.0.29); moves only after a deliberate re-test |
@@ -725,13 +725,17 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
 | `designer` | `.ecmwf-multi-agents/design/<slug>/` | Claude Opus 5.5, high |
 | `data-scientist` | `.ecmwf-multi-agents/data/<slug>/` | Claude Sonnet 5.5, high |
 
-- [~] Tiago: Research on opencode 2.2.5: removing or disabling an agent from the late
+- [x] Tiago: Research on opencode 2.2.5: removing or disabling an agent from the late
   transform for file, central and registered agents, and whether it leaves `lead`'s subagent
   list; browser access for a helper (opencode's browser tools, Playwright through Code Mode, a
   headless screenshot from the shell); a plugin command that answers without a model turn.
-  Addendum in `docs/research/opencode-v2.md`
-- [ ] Tiago: ADR 0005 and `docs/architecture.md`: optional and switchable helpers (roles,
-  permissions, routing, settings, profiles, work files)
+  Addendum in `docs/research/opencode-v2.md`: the late transform can `remove` any agent and
+  a removed one leaves the subagent list; opencode's browser tools only work in the session a
+  desktop browser attached to, so no helper gets a browser rule; `session.synthetic` with
+  `resume: false` posts a notice without a turn
+- [x] Tiago: ADR 0005 and `docs/architecture.md`: optional and switchable helpers (roles,
+  permissions, routing, settings, profiles, work files). The optional helpers come only from
+  the plugin (no generated file, no central entry), registered only when on
 - [ ] Tiago: Settings `agents.<id>.enabled` (boolean; refused for `lead`), merge, sources,
   schema
 - [ ] Tiago: Manifest and generator: optional agents, one routing line per helper, files for
