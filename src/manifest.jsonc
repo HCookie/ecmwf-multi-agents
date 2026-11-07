@@ -22,7 +22,10 @@
   // - skill 1450 -> 1500: `/execute` asks before resuming a plan still in progress from another
   //   session, whose helpers may still be running there, and answers the user before it acts
   //   on a completion, even one that arrives during the lookup. Measured 1492.
-  "budgets": { "lead": 2050, "helper": 750, "command": 500, "skill": 1500 },
+  // - routing 100, lead-all: an optional helper's line in lead's helper list, and lead's prompt
+  //   with every such line and the line for helpers that are off (ADR 0005); lead-all is the
+  //   measured size of that largest prompt, rounded up to the next 50. Measured 2341.
+  "budgets": { "lead": 2050, "helper": 750, "command": 500, "skill": 1500, "routing": 100, "lead-all": 2350 },
 
   // Named lists of {action, resource}. A permission entry {"use": name, "effect": e}
   // expands to one rule per item, all with effect e.
@@ -44,7 +47,9 @@
       { "action": "shell", "resource": "gh pr merge *" },
       { "action": "shell", "resource": "gh pr close *" },
       { "action": "shell", "resource": "gh release *" },
-      { "action": "shell", "resource": "gh repo delete *" }
+      { "action": "shell", "resource": "gh repo delete *" },
+      // Filing an issue publishes the tester's draft; lead files one only when the user approves.
+      { "action": "shell", "resource": "gh issue create *" }
     ],
     // Git commands that change history, the index, branches, remotes or the working tree
     // state that lead manages. Helpers never run these, not even their read-only forms such
@@ -120,6 +125,11 @@
         { "action": "delegate", "resource": "scout", "effect": "allow" },
         { "action": "delegate", "resource": "builder", "effect": "allow" },
         { "action": "delegate", "resource": "reviewer", "effect": "allow" },
+        // The optional helpers: a rule for one that is off names no agent and lists nothing.
+        { "action": "delegate", "resource": "researcher", "effect": "allow" },
+        { "action": "delegate", "resource": "tester", "effect": "allow" },
+        { "action": "delegate", "resource": "designer", "effect": "allow" },
+        { "action": "delegate", "resource": "data-scientist", "effect": "allow" },
         { "use": "approval-needed", "effect": "ask" }
       ]
     },
@@ -179,8 +189,105 @@
         { "action": "skill", "resource": "ecmwf-multi-agents-*", "effect": "deny" },
         { "use": "helper-tools", "effect": "deny" }
       ]
+    },
+
+    // Optional helpers (ADR 0005): off until a settings file switches them on, and then
+    // registered by the plugin alone; they have no generated file. `routing` is the line the
+    // plugin adds to lead's helper list while the helper is on. They run code, so their shell
+    // is the user's policy with git and `gh` writes denied, and Code Mode stays open for MCP
+    // servers such as Playwright or data services. No browser rule: opencode's browser tools
+    // only work in the session a desktop browser attached to, never in a helper's.
+    "researcher": {
+      "mode": "subagent",
+      "description": "Deep investigation of a hard question: compares options, may run experiments in a scratch folder, and writes a report.",
+      "prompt": ["agents/researcher.md"],
+      "budget": "helper",
+      "steps": 80,
+      "optional": true,
+      "routing": "a hard question that needs depth: comparing options, finding out why, or an experiment that settles it, run in its scratch folder. It costs more than a scout, so not for lookups. It changes no project file (check `git status`); its full findings are in its notes file.",
+      // Edits are denied except its notes and scratch folders, as for scout.
+      "permissions": [
+        { "action": "edit", "resource": "*", "effect": "deny" },
+        { "action": "edit", "resource": ".ecmwf-multi-agents/notes/*", "effect": "allow" },
+        { "action": "edit", "resource": "*/.ecmwf-multi-agents/notes/*", "effect": "allow" },
+        { "action": "edit", "resource": ".ecmwf-multi-agents/scratch/*", "effect": "allow" },
+        { "action": "edit", "resource": "*/.ecmwf-multi-agents/scratch/*", "effect": "allow" },
+        { "use": "git-writes", "effect": "deny" },
+        { "action": "shell", "resource": "gh *", "effect": "deny" },
+        { "action": "delegate", "resource": "*", "effect": "deny" },
+        { "action": "question", "resource": "*", "effect": "deny" },
+        { "action": "skill", "resource": "ecmwf-multi-agents-*", "effect": "deny" },
+        { "use": "helper-tools", "effect": "deny" }
+      ]
+    },
+
+    "tester": {
+      "mode": "subagent",
+      "description": "Tries to break a change or a piece of code with edge cases and new tests; never fixes product code; drafts issues.",
+      "prompt": ["agents/tester.md"],
+      "budget": "helper",
+      "steps": 60,
+      "optional": true,
+      "routing": "tries to break a change or a piece of code with edge cases and new tests, and fixes nothing. Check that it changed only test files. Show its issue drafts in `.ecmwf-multi-agents/issues/` to the user; file one with `gh issue create` only when the user approves.",
+      // Test files can be anywhere in a project, so edits follow the user's policy, as for
+      // builder; its prompt and lead's check keep it to test files.
+      "permissions": [
+        { "use": "git-writes", "effect": "deny" },
+        { "action": "shell", "resource": "gh *", "effect": "deny" },
+        { "action": "delegate", "resource": "*", "effect": "deny" },
+        { "action": "question", "resource": "*", "effect": "deny" },
+        { "action": "skill", "resource": "ecmwf-multi-agents-*", "effect": "deny" },
+        { "use": "helper-tools", "effect": "deny" }
+      ]
+    },
+
+    "designer": {
+      "mode": "subagent",
+      "description": "Designs user interfaces and interactions: a spec, a standalone prototype and screenshots. Never changes the project's code.",
+      "prompt": ["agents/designer.md"],
+      "budget": "helper",
+      "steps": 60,
+      "optional": true,
+      "routing": "designs an interface or an interaction: a spec, a prototype and screenshots in `.ecmwf-multi-agents/design/`; it changes no project file (check `git status`). Take its QUESTIONS to the user, then brief a builder with the agreed spec.",
+      // Edits are denied except its design folder.
+      "permissions": [
+        { "action": "edit", "resource": "*", "effect": "deny" },
+        { "action": "edit", "resource": ".ecmwf-multi-agents/design/*", "effect": "allow" },
+        { "action": "edit", "resource": "*/.ecmwf-multi-agents/design/*", "effect": "allow" },
+        { "use": "git-writes", "effect": "deny" },
+        { "action": "shell", "resource": "gh *", "effect": "deny" },
+        { "action": "delegate", "resource": "*", "effect": "deny" },
+        { "action": "question", "resource": "*", "effect": "deny" },
+        { "action": "skill", "resource": "ecmwf-multi-agents-*", "effect": "deny" },
+        { "use": "helper-tools", "effect": "deny" }
+      ]
+    },
+
+    "data-scientist": {
+      "mode": "subagent",
+      "description": "Answers questions about datasets with scripts it writes and runs, keeping the data out of its context.",
+      "prompt": ["agents/data-scientist.md"],
+      "budget": "helper",
+      "steps": 60,
+      "optional": true,
+      "routing": "answers a question about datasets with scripts it runs, never reading the data itself; it changes no project file (check `git status`). Give it the data's paths; it downloads nothing, so fetch new data only when the user agrees.",
+      // Edits are denied except its data folder; the input data stays read-only.
+      "permissions": [
+        { "action": "edit", "resource": "*", "effect": "deny" },
+        { "action": "edit", "resource": ".ecmwf-multi-agents/data/*", "effect": "allow" },
+        { "action": "edit", "resource": "*/.ecmwf-multi-agents/data/*", "effect": "allow" },
+        { "use": "git-writes", "effect": "deny" },
+        { "action": "shell", "resource": "gh *", "effect": "deny" },
+        { "action": "delegate", "resource": "*", "effect": "deny" },
+        { "action": "question", "resource": "*", "effect": "deny" },
+        { "action": "skill", "resource": "ecmwf-multi-agents-*", "effect": "deny" },
+        { "use": "helper-tools", "effect": "deny" }
+      ]
     }
   },
+
+  // Added to lead's helper list when a helper that is on by default is switched off.
+  "helperOff": "Helpers not in this list are switched off in this project: do their work yourself, also where a command or skill names them.",
 
   // Names checked against opencode's built-in commands in docs/research/command-clashes.md.
   // `review` deliberately replaces opencode's built-in review command.

@@ -751,8 +751,10 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   notice and no model turn. `/onboard` and the plan skill wording go with the skills task
 - [x] Tiago: `doctor` and the installer report each helper on or off and the file that chose
   it, and helpers opencode did not follow
-- [ ] Tiago: The four agents: prompts, permissions, profiles, routing lines; `lead` asks before
-  `gh issue create`
+- [x] Tiago: The four agents: prompts, permissions, profiles, routing lines; `lead` asks before
+  `gh issue create`. Prompts 746, 731, 704 and 746 tokens (helper budget 750); routing lines
+  62 to 71 (budget 100); `lead` with every line 2341 (`lead-all` 2350). `tools/harness.test.ts`
+  holds the source to the contract: rules, folders, report formats and profiles
 - [ ] Tiago: Guide and plan skills, README, install guide, changelog
 - [ ] Tiago: Integration tests on 2.2.5 (a `plugins` line, a file install, a central install)
   with `tester` and `designer` on and `builder` off

@@ -1,6 +1,6 @@
 {
   "id": "anthropic",
-  "description": "Anthropic models only. The reviewer uses the strongest model, since a different family is not available.",
+  "description": "Anthropic models only. The reviewer and the tester use the strongest model, since a different family is not available.",
   "agents": {
     "lead": {
       "model": "anthropic/claude-opus-5-5",
@@ -16,6 +16,22 @@
     },
     "reviewer": {
       "model": "anthropic/claude-opus-5-5",
+      "effort": "high"
+    },
+    "researcher": {
+      "model": "anthropic/claude-opus-5-5",
+      "effort": "max"
+    },
+    "tester": {
+      "model": "anthropic/claude-opus-5-5",
+      "effort": "high"
+    },
+    "designer": {
+      "model": "anthropic/claude-opus-5-5",
+      "effort": "high"
+    },
+    "data-scientist": {
+      "model": "anthropic/claude-sonnet-5-5",
       "effort": "high"
     }
   }

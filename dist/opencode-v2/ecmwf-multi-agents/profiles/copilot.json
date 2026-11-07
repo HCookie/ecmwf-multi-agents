@@ -17,6 +17,22 @@
     "reviewer": {
       "model": "github-copilot/gpt-6.1-sol",
       "effort": "medium"
+    },
+    "researcher": {
+      "model": "github-copilot/claude-opus-5.5",
+      "effort": "max"
+    },
+    "tester": {
+      "model": "github-copilot/gpt-6.1-sol",
+      "effort": "high"
+    },
+    "designer": {
+      "model": "github-copilot/claude-opus-5.5",
+      "effort": "high"
+    },
+    "data-scientist": {
+      "model": "github-copilot/claude-sonnet-5.5",
+      "effort": "high"
     }
   }
 }

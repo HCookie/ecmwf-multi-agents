@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { rewriteHelperSlotsLine } from "../plugin/apply.ts";
+import { helpersOf, rewriteHelperList } from "../plugin/helper-list.ts";
 import { helperIds } from "../plugin/helpers.ts";
 import { inlineCommands } from "../plugin/inline.ts";
 import { DEFAULT_MAX_HELPER_SLOTS } from "../plugin/settings.ts";
@@ -166,14 +167,27 @@ describe("embedHarness", () => {
     expect(embedHarness(without)).not.toHaveProperty("helperOff");
   });
 
-  test("from src/: lead and three helpers; review and progress answered inline", async () => {
+  test("from src/: lead, three helpers and four optional ones; review and progress answered inline", async () => {
     const data = embedHarness(resolveHarness(await load(root)));
-    expect(data.agents.map((agent) => [agent.id, agent.mode])).toEqual([
-      ["lead", "primary"],
-      ["scout", "subagent"],
-      ["builder", "subagent"],
-      ["reviewer", "subagent"],
+    expect(data.agents.map((agent) => [agent.id, agent.mode, agent.optional ?? false])).toEqual([
+      ["lead", "primary", false],
+      ["scout", "subagent", false],
+      ["builder", "subagent", false],
+      ["reviewer", "subagent", false],
+      ["researcher", "subagent", true],
+      ["tester", "subagent", true],
+      ["designer", "subagent", true],
+      ["data-scientist", "subagent", true],
     ]);
+    // The plugin can rewrite the generated lead's helper list for every combination of helpers.
+    const lead = data.agents.find((agent) => agent.id === data.defaultAgent)!;
+    const helpers = helpersOf(data);
+    expect(rewriteHelperList(lead.system!, helpers, new Set(["scout", "builder", "reviewer"]), data.helperOff, lead.id)).toEqual({ prompt: lead.system! });
+    const all = rewriteHelperList(lead.system!, helpers, new Set(helpers.map((helper) => helper.id)), data.helperOff, lead.id).prompt!;
+    for (const helper of helpers) expect(all).toContain(`\n- ${helper.id}: `);
+    const none = rewriteHelperList(lead.system!, helpers, new Set(), data.helperOff, lead.id).prompt!;
+    expect(none).toContain(`\n- ${data.helperOff}\n`);
+    for (const helper of helpers) expect(none).not.toContain(`\n- ${helper.id}: `);
     const inline = inlineCommands(data, helperIds(data));
     expect(inline.map((command) => [command.name, command.agent])).toEqual([
       ["review", "reviewer"],
@@ -181,7 +195,6 @@ describe("embedHarness", () => {
     ]);
     expect(inline[0]!.template).toContain("Target: $ARGUMENTS");
     // Installed files without the plugin must carry the same default as the settings.
-    const lead = data.agents.find((agent) => agent.id === data.defaultAgent)!;
     expect(rewriteHelperSlotsLine(lead.system!, DEFAULT_MAX_HELPER_SLOTS, lead.id)).toEqual({ prompt: lead.system! });
   });
 

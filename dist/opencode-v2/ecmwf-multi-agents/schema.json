@@ -24,7 +24,7 @@
     },
     "profile": {
       "title": "Model profile",
-      "description": "Which models the agents use. Default: default. anthropic: Anthropic models only. The reviewer uses the strongest model, since a different family is not available. copilot: GitHub Copilot models only, with the same split as the default profile. default: Anthropic for lead, scout and builder; GitHub Copilot GPT for the reviewer, so reviews come from a different model family. inherit: Every agent uses the model selected in the session. Helpers still differ by step limit.",
+      "description": "Which models the agents use. Default: default. anthropic: Anthropic models only. The reviewer and the tester use the strongest model, since a different family is not available. copilot: GitHub Copilot models only, with the same split as the default profile. default: Anthropic for lead, scout and builder; GitHub Copilot GPT for the reviewer and the tester, so they check work with a different model family. inherit: Every agent uses the model selected in the session. Helpers still differ by step limit.",
       "type": "string",
       "enum": [
         "anthropic",
@@ -174,6 +174,138 @@
             "steps": {
               "title": "Step limit",
               "description": "Most model turns reviewer may take before it stops and reports. A whole number of at least 1. Default: 30.",
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "researcher": {
+          "title": "researcher",
+          "description": "Deep investigation of a hard question: compares options, may run experiments in a scratch folder, and writes a report. Settings here override the profile for researcher.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "title": "On or off",
+              "description": "Switch researcher on or off, for you or for one project. Default: false: researcher is an optional helper, on only where a settings file switches it on.",
+              "type": "boolean",
+              "default": false
+            },
+            "model": {
+              "title": "Model",
+              "description": "Model for researcher, written as provider/model, for example anthropic/claude-opus-5-5. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "type": "string",
+              "pattern": "^[^/#\\s]+\\/[^#\\s]+$"
+            },
+            "effort": {
+              "title": "Reasoning effort",
+              "description": "Reasoning effort for the model of researcher. Common values: low, medium, high, xhigh and max; some models also take none. Default: max, from the default profile. It applies only when researcher has a model, from the profile or from this entry, so it has no effect under the inherit profile unless this entry also names a model. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^#\\s]+$"
+            },
+            "steps": {
+              "title": "Step limit",
+              "description": "Most model turns researcher may take before it stops and reports. A whole number of at least 1. Default: 80.",
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "tester": {
+          "title": "tester",
+          "description": "Tries to break a change or a piece of code with edge cases and new tests; never fixes product code; drafts issues. Settings here override the profile for tester.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "title": "On or off",
+              "description": "Switch tester on or off, for you or for one project. Default: false: tester is an optional helper, on only where a settings file switches it on.",
+              "type": "boolean",
+              "default": false
+            },
+            "model": {
+              "title": "Model",
+              "description": "Model for tester, written as provider/model, for example github-copilot/gpt-6.1-sol. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "type": "string",
+              "pattern": "^[^/#\\s]+\\/[^#\\s]+$"
+            },
+            "effort": {
+              "title": "Reasoning effort",
+              "description": "Reasoning effort for the model of tester. Common values: low, medium, high, xhigh and max; some models also take none. Default: high, from the default profile. It applies only when tester has a model, from the profile or from this entry, so it has no effect under the inherit profile unless this entry also names a model. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^#\\s]+$"
+            },
+            "steps": {
+              "title": "Step limit",
+              "description": "Most model turns tester may take before it stops and reports. A whole number of at least 1. Default: 60.",
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "designer": {
+          "title": "designer",
+          "description": "Designs user interfaces and interactions: a spec, a standalone prototype and screenshots. Never changes the project's code. Settings here override the profile for designer.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "title": "On or off",
+              "description": "Switch designer on or off, for you or for one project. Default: false: designer is an optional helper, on only where a settings file switches it on.",
+              "type": "boolean",
+              "default": false
+            },
+            "model": {
+              "title": "Model",
+              "description": "Model for designer, written as provider/model, for example anthropic/claude-opus-5-5. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "type": "string",
+              "pattern": "^[^/#\\s]+\\/[^#\\s]+$"
+            },
+            "effort": {
+              "title": "Reasoning effort",
+              "description": "Reasoning effort for the model of designer. Common values: low, medium, high, xhigh and max; some models also take none. Default: high, from the default profile. It applies only when designer has a model, from the profile or from this entry, so it has no effect under the inherit profile unless this entry also names a model. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^#\\s]+$"
+            },
+            "steps": {
+              "title": "Step limit",
+              "description": "Most model turns designer may take before it stops and reports. A whole number of at least 1. Default: 60.",
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "data-scientist": {
+          "title": "data-scientist",
+          "description": "Answers questions about datasets with scripts it writes and runs, keeping the data out of its context. Settings here override the profile for data-scientist.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "title": "On or off",
+              "description": "Switch data-scientist on or off, for you or for one project. Default: false: data-scientist is an optional helper, on only where a settings file switches it on.",
+              "type": "boolean",
+              "default": false
+            },
+            "model": {
+              "title": "Model",
+              "description": "Model for data-scientist, written as provider/model, for example anthropic/claude-sonnet-5-5. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "type": "string",
+              "pattern": "^[^/#\\s]+\\/[^#\\s]+$"
+            },
+            "effort": {
+              "title": "Reasoning effort",
+              "description": "Reasoning effort for the model of data-scientist. Common values: low, medium, high, xhigh and max; some models also take none. Default: high, from the default profile. It applies only when data-scientist has a model, from the profile or from this entry, so it has no effect under the inherit profile unless this entry also names a model. No \"#\" and no spaces. Leave it out to use the profile's choice.",
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^#\\s]+$"
+            },
+            "steps": {
+              "title": "Step limit",
+              "description": "Most model turns data-scientist may take before it stops and reports. A whole number of at least 1. Default: 60.",
               "type": "integer",
               "minimum": 1
             }

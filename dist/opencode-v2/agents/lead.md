@@ -20,6 +20,18 @@ permissions:
   - action: subagent
     resource: reviewer
     effect: allow
+  - action: subagent
+    resource: researcher
+    effect: allow
+  - action: subagent
+    resource: tester
+    effect: allow
+  - action: subagent
+    resource: designer
+    effect: allow
+  - action: subagent
+    resource: data-scientist
+    effect: allow
   - action: shell
     resource: "git push *"
     effect: ask
@@ -67,6 +79,9 @@ permissions:
     effect: ask
   - action: shell
     resource: "gh repo delete *"
+    effect: ask
+  - action: shell
+    resource: "gh issue create *"
     effect: ask
 ---
 
