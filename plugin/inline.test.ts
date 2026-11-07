@@ -562,10 +562,13 @@ describe("Inline with a helper switched off", () => {
     );
   });
 
-  test("a helper's command still has its fallback when commands cannot run inline", () => {
+  test("a helper's command still has its fallback when commands cannot run inline", async () => {
     const sessions = new FakeSessions();
     delete (sessions.ctx.session as { wait?: unknown }).wait;
     expect(makeOff(["builder", "reviewer"], sessions).inline.commands().map((item) => item.name)).toEqual(["progress"]);
     expect(makeOff(["scout", "builder", "reviewer"], sessions).inline.commands()).toEqual([]);
+    const review = makeOff(["scout", "builder"], sessions).inline.commands();
+    expect(review.map((item) => item.name)).toEqual(["review"]);
+    await expect(review[0]!.execute({ sessionID: "s", prompt: { text: "" } })).rejects.toThrow(reviewerOffText(harness));
   });
 });

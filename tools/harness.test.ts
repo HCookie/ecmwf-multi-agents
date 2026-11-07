@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { load } from "./load.ts";
 import { resolveHarness } from "./resolve.ts";
+import { type JsonSchema, settingsSchema } from "./schema.ts";
 import type { Rule } from "./types.ts";
 
 const root = path.resolve(import.meta.dir, "..");
@@ -48,11 +49,22 @@ describe("the optional helpers", () => {
     expect(harness.helperOff).toBeDefined();
   });
 
-  test("lead may hand work to every helper, and asks before it files an issue", () => {
+  test("lead may hand work to the default helpers, the plugin allows an optional one while it is on, and lead asks before it files an issue", () => {
     const lead = agent("lead").permissions;
-    for (const id of HELPERS) expect(decide(lead, "delegate", id)).toBe("allow");
-    expect(decide(lead, "delegate", "general")).toBe("deny");
+    for (const id of ["scout", "builder", "reviewer"]) expect([id, decide(lead, "delegate", id)]).toEqual([id, "allow"]);
+    for (const id of [...OPTIONAL, "general"]) expect([id, decide(lead, "delegate", id)]).toEqual([id, "deny"]);
     expect(decide(lead, "shell", "gh issue create --title x --body-file y")).toBe("ask");
+  });
+
+  test("with the reviewer off, lead says no independent review is available instead of reviewing its own work", () => {
+    expect(harness.helperOff).toContain("no independent review");
+    const reviewer = (settingsSchema(harness).properties as Record<string, JsonSchema>).agents!.properties as Record<string, JsonSchema>;
+    const enabled = (reviewer.reviewer!.properties as Record<string, JsonSchema>).enabled!;
+    expect(String(enabled.description)).toBe("Switch reviewer on or off, for you or for one project. Default: true. When it is off, nothing is reviewed: lead says no independent review is available.");
+  });
+
+  test("lead knows that the tester's failing tests are meant to fail", () => {
+    expect(agent("tester").routing).toContain("failing tests");
   });
 
   test("no helper asks the user, hands work on, loads the harness's skills or uses lead's helper tools", () => {

@@ -24,10 +24,12 @@
   //   on a completion, even one that arrives during the lookup. Measured 1492.
   // - routing 100, lead-all: an optional helper's line in lead's helper list, and lead's prompt
   //   with every such line and the line for helpers that are off (ADR 0005); lead-all is the
-  //   measured size of that largest prompt, rounded up to the next 50. Measured 2341.
+  //   measured size of that largest prompt, rounded up to the next 50. Measured 2376, with
+  //   the tester's note that its failing tests are kept and lead's rule never to review its own
+  //   work while the reviewer is off.
   // - skill 1500 -> 1750: the users' guide to the optional helpers and to switching helpers on
   //   and off. Measured 1736; the guide is loaded only when the user asks how the harness works.
-  "budgets": { "lead": 2050, "helper": 750, "command": 500, "skill": 1750, "routing": 100, "lead-all": 2350 },
+  "budgets": { "lead": 2050, "helper": 750, "command": 500, "skill": 1750, "routing": 100, "lead-all": 2400 },
 
   // Named lists of {action, resource}. A permission entry {"use": name, "effect": e}
   // expands to one rule per item, all with effect e.
@@ -127,11 +129,8 @@
         { "action": "delegate", "resource": "scout", "effect": "allow" },
         { "action": "delegate", "resource": "builder", "effect": "allow" },
         { "action": "delegate", "resource": "reviewer", "effect": "allow" },
-        // The optional helpers: a rule for one that is off names no agent and lists nothing.
-        { "action": "delegate", "resource": "researcher", "effect": "allow" },
-        { "action": "delegate", "resource": "tester", "effect": "allow" },
-        { "action": "delegate", "resource": "designer", "effect": "allow" },
-        { "action": "delegate", "resource": "data-scientist", "effect": "allow" },
+        // No rule for the optional helpers: the plugin allows each one after these while it is
+        // on, so an agent of the user's with one of their names stays out of reach.
         { "use": "approval-needed", "effect": "ask" }
       ]
     },
@@ -196,9 +195,11 @@
     // Optional helpers (ADR 0005): off until a settings file switches them on, and then
     // registered by the plugin alone; they have no generated file. `routing` is the line the
     // plugin adds to lead's helper list while the helper is on. They run code, so their shell
-    // is the user's policy with git and `gh` writes denied, and Code Mode stays open for MCP
-    // servers such as Playwright or data services. No browser rule: opencode's browser tools
-    // only work in the session a desktop browser attached to, never in a helper's.
+    // is the user's policy with git and `gh` writes denied. Code Mode stays the user's policy,
+    // as for builder, for the MCP servers each may need: documentation and search for
+    // researcher, Playwright for tester and designer, data services for data-scientist; it
+    // costs about 2,200 tokens a request where it is not denied. No browser rule: opencode's
+    // browser tools only work in the session a desktop browser attached to, never in a helper's.
     "researcher": {
       "mode": "subagent",
       "description": "Deep investigation of a hard question: compares options, may run experiments in a scratch folder, and writes a report.",
@@ -230,7 +231,7 @@
       "budget": "helper",
       "steps": 60,
       "optional": true,
-      "routing": "tries to break a change or a piece of code with edge cases and new tests, and fixes nothing. Check that it changed only test files. Show its issue drafts in `.ecmwf-multi-agents/issues/` to the user; file one with `gh issue create` only when the user approves.",
+      "routing": "tries to break a change or a piece of code with edge cases and new tests, and fixes nothing. Check that it changed only test files; its failing tests show real bugs, so keep them. Show its issue drafts in `.ecmwf-multi-agents/issues/` to the user; file one with `gh issue create` only when the user approves.",
       // Test files can be anywhere in a project, so edits follow the user's policy, as for
       // builder; its prompt and lead's check keep it to test files.
       "permissions": [
@@ -289,7 +290,7 @@
   },
 
   // Added to lead's helper list when a helper that is on by default is switched off.
-  "helperOff": "Helpers not in this list are switched off in this project: do their work yourself, also where a command or skill names them.",
+  "helperOff": "Helpers not in this list are switched off in this project: do their work yourself, also where a command or skill names them, but never review your own work: without the reviewer, say no independent review is available.",
 
   // Names checked against opencode's built-in commands in docs/research/command-clashes.md.
   // `review` deliberately replaces opencode's built-in review command.

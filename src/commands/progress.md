@@ -1,4 +1,4 @@
-Report progress on a plan, briefly and in plain words. You do not see the conversation; this message is all you have.
+Report progress on a plan, briefly and in plain words, from the plan file alone: this message is all you need.
 
 Plan: $ARGUMENTS
 

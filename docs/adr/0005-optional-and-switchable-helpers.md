@@ -25,9 +25,9 @@ at its budget (2047 of 2050 tokens).
 
 opencode 2.2.5 lets a plugin remove any agent from its late agent transform, whatever brought
 it, and a removed agent leaves the delegation tool's list. A plugin command can refuse with a
-message, which the TUI shows, without starting a model turn. A helper cannot use opencode's browser tools, which only work in
-the session a desktop browser attached to (`docs/research/opencode-v2.md`, Addendum: switching
-helpers on and off).
+message, which the TUI shows, without starting a model turn. A helper cannot use opencode's
+browser tools, which only work in the session a desktop browser attached to
+(`docs/research/opencode-v2.md`, Addendum: switching helpers on and off).
 
 ## Decisions
 
@@ -44,15 +44,16 @@ helpers on and off).
 - `lead`'s instructions name only the helpers that are on. The plugin removes the lines of the
   helpers that are off from `lead`'s helper list and adds a one-line routing entry for each
   optional helper that is on, from the manifest. When a default helper is off it adds one line
-  telling `lead` to do that helper's work itself. With the defaults, `lead`'s prompt does not
-  change.
-- `lead` may delegate to every harness helper; an allow rule for a helper that is not there
-  lists nothing.
-- With the reviewer off the review policy is `never`; a settings file that chose another policy
-  gets a warning. `/review` then refuses with a message naming the setting, and no model turn
-  starts. With `scout` off,
-  `/progress` runs on `lead`; `/onboard` and the plan skill follow `lead`'s rule for helpers
-  that are off.
+  telling `lead` to do that helper's work itself, but never to review its own work. With the
+  defaults, `lead`'s prompt does not change.
+- `lead`'s own rules allow it to delegate to the default helpers only. The plugin adds an allow
+  rule for each optional helper while it is on, after them, so an agent of the user's with an
+  optional helper's name stays out of `lead`'s reach as before.
+- With the reviewer off the review policy is `never`, and a settings file that chose another
+  policy gets a warning. `lead` says no independent review is available rather than reviewing
+  its own work, and `/review` refuses with a message naming the setting, with no model turn.
+  With `scout` off, `/progress` runs on `lead`; `/onboard` and the plan skill follow `lead`'s
+  rule for helpers that are off.
 - Writes stay narrow: `researcher` writes notes and its scratch folder, `designer` its design
   folder, `data-scientist` its data folder, and `tester` test files and issue drafts, which
   `lead` files with `gh issue create` only after the user approves (an `ask` rule). Shell

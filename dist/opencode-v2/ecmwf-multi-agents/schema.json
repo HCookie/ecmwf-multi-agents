@@ -154,7 +154,7 @@
           "properties": {
             "enabled": {
               "title": "On or off",
-              "description": "Switch reviewer on or off, for you or for one project. Default: true. When it is off, lead does its work itself.",
+              "description": "Switch reviewer on or off, for you or for one project. Default: true. When it is off, nothing is reviewed: lead says no independent review is available.",
               "type": "boolean",
               "default": true
             },

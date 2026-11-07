@@ -59,7 +59,9 @@ Rules are ordered and the last matching rule wins. opencode places agent rules a
 user's own rules, so an agent rule overrides the user's policy in both directions; the plugin
 keeps that order for the agents it registers (see [Registration](#registration)). The harness
 therefore adds mostly `deny` rules, and only these deliberate `allow` and `ask` rules: `lead`
-may ask questions and delegate to the harness's helpers; `lead` asks before publishing or
+may ask questions and delegate to the harness's helpers that are on (its own rules allow the
+default helpers, and the plugin allows each optional helper while it is on, after them, so an
+agent of the user's with an optional helper's name stays out of reach); `lead` asks before publishing or
 destructive git commands and before filing an issue; `scout` may run a short list of
 read-only inspection commands and write its notes folder; `researcher`, `designer` and
 `data-scientist` may write their own work folders; the reviewer may read pull requests. One
@@ -71,7 +73,7 @@ consequence: a user who denies `git push` globally gets an approval prompt in `l
 | Edit files | user policy | only `.ecmwf-multi-agents/notes/` | user policy | deny |
 | Shell | user policy, with approval for push, PR, merge, history rewrites and `gh issue create` | read-only commands only | user policy, git and `gh` writes denied | user policy, git and `gh` writes denied |
 | Web fetch and search | user policy | user policy | user policy | user policy |
-| Delegate | the harness's helpers only | deny | deny | deny |
+| Delegate | the harness's helpers that are on | deny | deny | deny |
 | Ask the user | allow | deny | deny | deny |
 | Harness skills (`ecmwf-multi-agents-*`) | user policy | deny | deny | deny |
 | Code Mode | user policy | deny | user policy | deny |
@@ -155,9 +157,10 @@ Choosing a helper:
 default helpers, one line each. The plugin removes the line of a default helper that is off,
 adds the routing line of each optional helper that is on (the manifest's `routing` field), and,
 when any default helper is off, adds the manifest's `helperOff` line, which tells `lead` to do
-the work of a helper it does not see itself, also where a command or skill names that helper.
-With a helper off, its share of the work goes to `lead`: reading for `scout`, changes for
-`builder`, and no independent review for `reviewer` (the policy becomes `never`).
+the work of a helper it does not see itself, also where a command or skill names that helper,
+but never to review its own work. With a helper off, its share of the work goes to `lead`:
+reading for `scout`, changes for `builder`; for `reviewer` there is no independent review (the
+policy becomes `never`), and `lead` says so when asked for one.
 
 Escalation on a failed or partial task: `builder` again with the gap stated exactly, then the
 user. The retry's CONTEXT says what the earlier attempt changed and why it fell short; the
@@ -208,7 +211,8 @@ have them:
 
 A steer amends the brief (principle 3): the helper follows the latest message, keeps the
 earlier LIMITS unless the steer lifts them, and reports what changed in the section its
-report has for it (ASSUMPTIONS for the builder, ANSWER for a scout, CHECKED for the reviewer). A
+report has for it (ASSUMPTIONS for the builder, ANSWER for a scout, the researcher and the data
+scientist, CHECKED for the reviewer, FINDINGS for the tester, DECISIONS for the designer). A
 steer is never an approval and never changes permissions. `lead` steers when the helper's
 reading so far is still useful and the correction is small; it cancels and briefs again when
 the direction was wrong. It steers reactively, when the user asks or when a status check it
@@ -757,7 +761,7 @@ Prompt budgets, checked by the generator at about four characters per token:
 | Kind | Budget |
 |---|---|
 | `lead` prompt | 2,050 tokens |
-| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | 2,350 tokens (`lead-all`) |
+| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | 2,400 tokens (`lead-all`) |
 | Helper prompt | 750 tokens |
 | Routing line of an optional helper | 100 tokens |
 | Command template | 500 tokens |

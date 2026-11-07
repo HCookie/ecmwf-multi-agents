@@ -226,6 +226,25 @@ describe("applyToV2Agents with helpers switched on and off", () => {
     expect(editor.get("lead")!.system).toBe(LEAD_PROMPT.replace("- builder: makes one change.\n- reviewer: checks work.\n", `- reviewer: checks work.\n- ${HELPER_OFF}\n`));
   });
 
+  test("lead may hand work to an optional helper only while it is on: one allow rule, after its own", () => {
+    const own = [
+      { action: "subagent", resource: "*", effect: "deny" },
+      { action: "subagent", resource: "scout", effect: "allow" },
+    ];
+    const editor = withTester(v2Editor());
+    editor.get("lead")!.permissions = structuredClone(own);
+    apply(editor, { agents: { tester: { enabled: true } } });
+    // A second run in the same rebuild, as when two registrations overlap, adds nothing.
+    apply(editor, { agents: { tester: { enabled: true } } });
+    expect(editor.get("lead")!.permissions).toEqual([...own, { action: "subagent", resource: "tester", effect: "allow" }]);
+
+    // Off, as by default: a user's own agent with its name stays out of lead's reach.
+    const off = v2Editor();
+    off.get("lead")!.permissions = structuredClone(own);
+    apply(off);
+    expect(off.get("lead")!.permissions).toEqual(own);
+  });
+
   test("an optional helper switched on gets its line in lead's list and its profile model", () => {
     const editor = withTester(v2Editor());
     expect(apply(editor, { profile: "anthropic", agents: { tester: { enabled: true } } })).toEqual([]);

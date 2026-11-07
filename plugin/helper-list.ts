@@ -36,15 +36,6 @@ export function enabledHelpers(
 const line = (id: string, text: string) => `- ${id}: ${text}`;
 const bare = (text: string) => (text.endsWith("\r") ? text.slice(0, -1) : text);
 
-/** The helper list's lines as the prompt has them, in order, without line endings. */
-export function helperListLines(prompt: string, helpers: readonly HelperEntry[], helperOff: string | undefined): string[] {
-  const offLine = helperOff === undefined ? undefined : `- ${helperOff}`;
-  return prompt
-    .split("\n")
-    .map(bare)
-    .filter((text) => text === offLine || helpers.some((helper) => text.startsWith(`- ${helper.id}: `)));
-}
-
 /**
  * The prompt with the helper list for the helpers that are on. The list goes where the last of
  * its lines is: a default helper's line or one this function added. Lines it added before are

@@ -755,8 +755,12 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   it, and helpers opencode did not follow
 - [x] Tiago: The four agents: prompts, permissions, profiles, routing lines; `lead` asks before
   `gh issue create`. Prompts 746, 731, 704 and 746 tokens (helper budget 750); routing lines
-  62 to 71 (budget 100); `lead` with every line 2341 (`lead-all` 2350). `tools/harness.test.ts`
-  holds the source to the contract: rules, folders, report formats and profiles
+  62 to 80 (budget 100); `lead` with every line 2376 (`lead-all` 2400). `tools/harness.test.ts`
+  holds the source to the contract: rules, folders, report formats and profiles. After an
+  independent review (APPROVE, eight notes): `lead`'s own rules allow only the default
+  helpers and the plugin allows an optional one while it is on, so a user's own agent with its
+  name stays out of reach; with the reviewer off `lead` says no independent review is
+  available instead of reviewing its own work; the tester's failing tests are kept
 - [x] Tiago: Guide and plan skills, README, install guide, changelog. The guide grew to 1736
   tokens, so the skill budget went from 1500 to 1750 (reason in the manifest)
 - [x] Tiago: Integration tests on 2.2.5 (a `plugins` line, a file install, a central install)

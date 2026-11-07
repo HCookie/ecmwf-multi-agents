@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, test } from "bun:test";
-import { enabledHelpers, helperListLines, helpersOf, rewriteHelperList } from "./helper-list.ts";
+import { enabledHelpers, helpersOf, rewriteHelperList } from "./helper-list.ts";
 import { HELPER_OFF, LEAD_PROMPT, TESTER_ROUTING, embeddedFixture } from "./testing.ts";
 
 const harness = embeddedFixture();
@@ -47,9 +47,17 @@ describe("rewriteHelperList", () => {
     expect(rewriteHelperList(LEAD_PROMPT, helpers, on("scout", "reviewer"), HELPER_OFF, "lead")).toEqual({
       prompt: LEAD_PROMPT.replace("- builder: makes one change.\n- reviewer: checks work.\n", `- reviewer: checks work.\n- ${HELPER_OFF}\n`),
     });
-    const none = rewriteHelperList(LEAD_PROMPT, helpers, on("tester"), HELPER_OFF, "lead").prompt!;
-    expect(helperListLines(none, helpers, HELPER_OFF)).toEqual([`- tester: ${TESTER_ROUTING}`, `- ${HELPER_OFF}`]);
-    expect(none).not.toContain("- scout:");
+  });
+
+  test("every default helper off: the list is the optional ones that are on and the line for those off, or that line alone", () => {
+    expect(rewriteHelperList(LEAD_PROMPT, helpers, on("tester"), HELPER_OFF, "lead")).toEqual({
+      prompt: LEAD_PROMPT.replace("- scout: reads and reports.\n- builder: makes one change.\n- reviewer: checks work.\n", `- tester: ${TESTER_ROUTING}\n- ${HELPER_OFF}\n`),
+    });
+    const none = rewriteHelperList(LEAD_PROMPT, helpers, on(), HELPER_OFF, "lead").prompt!;
+    expect(none).toBe(LEAD_PROMPT.replace("- scout: reads and reports.\n- builder: makes one change.\n- reviewer: checks work.\n", `- ${HELPER_OFF}\n`));
+    // Rewritten again, the list is found from the line it added.
+    expect(rewriteHelperList(none, helpers, on(), HELPER_OFF, "lead").prompt).toBe(none);
+    expect(rewriteHelperList(none, helpers, on("tester"), HELPER_OFF, "lead").prompt).toContain(`- tester: ${TESTER_ROUTING}\n- ${HELPER_OFF}\n\nRun at most`);
   });
 
   test("without a line for helpers that are off, the lines of those helpers still go", () => {
@@ -78,12 +86,5 @@ describe("rewriteHelperList", () => {
     expect(rewriteHelperList(`${LEAD_PROMPT}\n- scout: again.`, helpers, on(...DEFAULTS), HELPER_OFF, "lead")).toEqual({
       problem: 'the prompt of lead has 2 lines "- scout: ..."; its helper list was left as it is, so it may name helpers that are off and miss ones that are on',
     });
-  });
-});
-
-describe("helperListLines", () => {
-  test("the lines of the helper list as the prompt has them, for doctor", () => {
-    expect(helperListLines(LEAD_PROMPT, helpers, HELPER_OFF)).toEqual(["- scout: reads and reports.", "- builder: makes one change.", "- reviewer: checks work."]);
-    expect(helperListLines("Custom lead.", helpers, HELPER_OFF)).toEqual([]);
   });
 });

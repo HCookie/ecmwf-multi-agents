@@ -38,7 +38,7 @@
 // `/review` and `/progress` are registered again, late in the same way, by a command transform:
 // their helper answers in the user's own session (inline.ts). The same `context` hook keeps that
 // helper to its brief; it sees a helper's requests there and lead's, never both at once. While
-// their helper is switched off, `/progress` runs on lead and `/review` posts a notice instead.
+// their helper is switched off, `/progress` runs on lead and `/review` refuses with a message.
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";

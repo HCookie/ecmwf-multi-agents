@@ -98,7 +98,8 @@ const agents: ResolvedAgent[] = [
     permissions: [
       { action: "question", resource: "*", effect: "allow" },
       { action: "delegate", resource: "*", effect: "deny" },
-      ...["scout", "builder", "reviewer", "tester"].map((resource): Rule => ({ action: "delegate", resource, effect: "allow" })),
+      // The optional tester is allowed by the plugin while it is on.
+      ...["scout", "builder", "reviewer"].map((resource): Rule => ({ action: "delegate", resource, effect: "allow" })),
       ...approvalNeeded,
     ],
   },

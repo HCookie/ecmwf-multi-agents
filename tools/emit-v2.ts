@@ -12,10 +12,10 @@
 // and, apart from that layout, the central install's template (v2CentralFiles):
 //
 //   central/opencode.json             agents and commands inline, for OPENCODE_CONFIG
-//
-// The optional helpers get neither a file nor a central entry: the plugin registers them.
 //   central/prompts/<id>.md           an agent's prompt, without frontmatter
 //   central/prompts/commands/<id>.md  a command's template, without frontmatter
+//
+// The optional helpers get neither a file nor a central entry: the plugin registers them.
 //
 // opencode 2.0.16 silently drops an agent file whose frontmatter fails validation, and reads a
 // file with any unknown frontmatter key as a legacy v1 agent. So this emitter writes only

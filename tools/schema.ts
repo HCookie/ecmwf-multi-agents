@@ -52,11 +52,16 @@ function effortHelp(agent: ResolvedAgent, harness: ResolvedHarness): string {
 }
 
 /** The switch of a helper; the default agent is always on and has none. */
-function enabledSchema(agent: ResolvedAgent, lead: string): JsonSchema {
+function enabledSchema(agent: ResolvedAgent, harness: ResolvedHarness): JsonSchema {
   const optional = agent.optional === true;
+  const lead = harness.defaultAgent;
+  // The agent /review runs on: nothing else gives an independent verdict.
+  const reviewer = harness.commands.find((command) => command.id === "review")?.agent;
   const meaning = optional
     ? `${agent.id} is an optional helper, on only where a settings file switches it on.`
-    : `When it is off, ${lead} does its work itself.`;
+    : agent.id === reviewer
+      ? `When it is off, nothing is reviewed: ${lead} says no independent review is available.`
+      : `When it is off, ${lead} does its work itself.`;
   return {
     title: "On or off",
     description: `Switch ${agent.id} on or off, for you or for one project. Default: ${!optional}${optional ? ":" : "."} ${meaning}`,
@@ -75,7 +80,7 @@ function agentSchema(agent: ResolvedAgent, harness: ResolvedHarness): JsonSchema
     type: "object",
     additionalProperties: false,
     properties: {
-      ...(agent.id === harness.defaultAgent ? {} : { enabled: enabledSchema(agent, harness.defaultAgent) }),
+      ...(agent.id === harness.defaultAgent ? {} : { enabled: enabledSchema(agent, harness) }),
       model: {
         title: "Model",
         description:

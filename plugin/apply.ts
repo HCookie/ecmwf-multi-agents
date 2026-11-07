@@ -158,6 +158,22 @@ export function applyToV2Agents(editor: V2AgentEditor, harness: EmbeddedHarness,
 
   const lead = editor.get(harness.defaultAgent);
   if (lead !== undefined) {
+    // lead's own rules allow only the default helpers, so an agent of the user's with an optional
+    // helper's name stays out of reach; an optional helper that is on is allowed after them. A
+    // rebuild starts from scratch, but two registrations may overlap in one: add the rule once.
+    const allows = helpers.filter((helper) => helper.optional === true && on.has(helper.id));
+    if (allows.length > 0) {
+      changes.push(() =>
+        editor.update(harness.defaultAgent, (agent) => {
+          if (!Array.isArray(agent.permissions)) agent.permissions = [];
+          const rules = agent.permissions;
+          for (const helper of allows) {
+            const last = [...rules].reverse().find((rule) => rule.action === "subagent" && rule.resource === helper.id);
+            if (last?.effect !== "allow") rules.push({ action: "subagent", resource: helper.id, effect: "allow" });
+          }
+        }),
+      );
+    }
     if (typeof lead.system === "string") {
       const result = rewriteReviewLine(lead.system, review, harness.defaultAgent);
       if (result.problem !== undefined) problems.push(reviewProblem(harness, settings, result.problem));
