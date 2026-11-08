@@ -804,16 +804,46 @@ delegation rules; `lead` does its work itself, `/progress` and `/onboard` run on
   Tests pin the tool descriptions the prompt now relies on, in the plugin's specs and in a
   real `lead` request. The background cases pass on real models, 5 of 5 for $1.04
   (`evals/results/lead-condensed.md`)
-- [ ] Shorten `lead` further with code changes, measured at about 55, 70 and 150 tokens: the
-  plugin writes only the active review policy's meaning; the plugin, not `lead`, adds the
-  work folder to the git exclude file; the routing guidance moves into the helpers'
-  descriptions, which the delegation tool lists only for helpers that are on, replacing
-  `lead`'s helper list and its rewrite (descriptions also show in the TUI)
 - [x] Tiago: Release 0.8.0 when asked: GitHub release `0.8.0`, and
   `@ecmwf.int/multi-agents@0.8.0` on npm with provenance
 
 Exit: `make check` and the integration suites pass on 2.2.5; each new helper and each switched
 off helper works on the stand-in.
+
+## Phase 11: a shorter `lead` prompt through the plugin
+
+`lead`'s prompt (1,893 tokens) still carries two things the plugin can do instead: the meaning
+of every review policy, though only one applies, and the rule to add the work folder to git's
+exclude file. Measured at about 55 and 50 tokens. The plugin has so far only read files; the
+second change makes it write one line into a project's `.git`. Tests come first in every
+task, and the budgets go down to the measured sizes.
+
+- [ ] Tiago: Research on 2.2.5: where the plugin learns that a session starts, and in which
+  folder (`session.created`, and the project root the plugin already finds); how to find the
+  exclude file without running git (a `.git` folder; a worktree's `.git` file, its `gitdir:`
+  line and `commondir`; a folder outside git); how the plugin writes a file. Addendum in
+  `docs/research/opencode-v2.md`
+- [ ] Tiago: Only the active review policy's meaning: the four meanings move from `lead.md`
+  to the manifest, and `lead`'s line becomes `Review policy: <policy>. <meaning>`, with the
+  meaning of `ask` standing on its own (today it refers to `auto`). The generator checks the
+  new line (`tools/resolve.ts`); the plugin rewrites the policy and its meaning together
+  (`rewriteReviewLine` in `plugin/apply.ts`), also to `never` while the reviewer is off;
+  `doctor` and `install.sh doctor` compare and show the whole line
+- [ ] Tiago: The work folder in git's exclude file, by the plugin: at each session start in a
+  git repository it appends `.ecmwf-multi-agents/` to the exclude file once (the owner chose
+  session start, which covers what helpers write through the shell, at the cost of one line
+  in `.git` of every repository the harness runs in). Nothing outside git or when the line is
+  there; a failure is reported, never thrown. `lead`'s rule goes, `doctor` warns when the
+  line is missing, and `docs/architecture.md` (The plugin, Work files) records the plugin's
+  first write into a project
+- [ ] Tiago: Budgets lowered to the measured sizes; integration suites on 2.2.5, with a
+  session start in a repository, a worktree and a folder outside git; real-model runs with
+  the owner's approval of the quota: `feature` and `plan-execute` (review policy `auto`),
+  `onboard` (its `workDirExcluded` check) and `review-background`
+- [ ] Tiago: Release when asked
+
+Exit: `make check` and the integration suites pass on 2.2.5; `lead`'s prompt carries one
+policy's meaning and no exclude rule; the evals above pass.
 
 ## Follow-ups
 
@@ -844,6 +874,14 @@ off helper works on the stand-in.
   evals after Phase 7 show whether the `lead` additions cost more than their size explains.
 - `/onboard` is shadowed in projects that define their own `onboard` command (some local
   projects do). Kept as requested; renaming to `survey` would avoid it.
+- Idea, to be discussed before any work, because it changes ADR 0005: move each helper's
+  routing guidance into its description, which opencode's delegation tool lists only for the
+  helpers that are on, and drop `lead`'s helper list with the plugin's rewrite of it
+  (`plugin/helper-list.ts`, the generator's helper-list check, the `routing` and `lead-all`
+  budgets). About 80 tokens with the default helpers; with optional helpers on, their
+  guidance moves into the tool rather than going. Against it: descriptions also show to users
+  in the TUI, the tool sorts helpers by name, descriptions would need a budget, and the rule
+  for helpers that are off still needs a place in `lead`'s prompt.
 
 ## Log
 
