@@ -818,25 +818,25 @@ exclude file. Measured at about 55 and 50 tokens. The plugin has so far only rea
 second change makes it write one line into a project's `.git`. Tests come first in every
 task, and the budgets go down to the measured sizes.
 
-- [ ] Tiago: Research on 2.2.5: where the plugin learns that a session starts, and in which
+- [~] Tiago: Research on 2.2.5: where the plugin learns that a session starts, and in which
   folder (`session.created`, and the project root the plugin already finds); how to find the
   exclude file without running git (a `.git` folder; a worktree's `.git` file, its `gitdir:`
   line and `commondir`; a folder outside git); how the plugin writes a file. Addendum in
   `docs/research/opencode-v2.md`
-- [ ] Tiago: Only the active review policy's meaning: the four meanings move from `lead.md`
+- [~] Tiago: Only the active review policy's meaning: the four meanings move from `lead.md`
   to the manifest, and `lead`'s line becomes `Review policy: <policy>. <meaning>`, with the
   meaning of `ask` standing on its own (today it refers to `auto`). The generator checks the
   new line (`tools/resolve.ts`); the plugin rewrites the policy and its meaning together
   (`rewriteReviewLine` in `plugin/apply.ts`), also to `never` while the reviewer is off;
   `doctor` and `install.sh doctor` compare and show the whole line
-- [ ] Tiago: The work folder in git's exclude file, by the plugin: at each session start in a
+- [~] Tiago: The work folder in git's exclude file, by the plugin: at each session start in a
   git repository it appends `.ecmwf-multi-agents/` to the exclude file once (the owner chose
   session start, which covers what helpers write through the shell, at the cost of one line
   in `.git` of every repository the harness runs in). Nothing outside git or when the line is
   there; a failure is reported, never thrown. `lead`'s rule goes, `doctor` warns when the
   line is missing, and `docs/architecture.md` (The plugin, Work files) records the plugin's
   first write into a project
-- [ ] Tiago: Budgets lowered to the measured sizes; integration suites on 2.2.5, with a
+- [~] Tiago: Budgets lowered to the measured sizes; integration suites on 2.2.5, with a
   session start in a repository, a worktree and a folder outside git; real-model runs with
   the owner's approval of the quota: `feature` and `plan-execute` (review policy `auto`),
   `onboard` (its `workDirExcluded` check) and `review-background`
