@@ -892,24 +892,25 @@ tests come first in every task.
   them, then each screen, state and decision as it goes, so a cut-off still leaves a spec;
   within the helper budget. Done: the spec starts with the flow, before the prototype;
   the designer's prompt is 725 tokens (750)
-- [x] Tiago: `lead` continues a helper that failed or stopped at its step limit: it resumes
-  that helper's session (the session ID its result gives) with a short brief to finish and
-  report, rather than doing the work itself; this widens the retry rules that now cover only
-  the builder and the scout. `lead` is at 1,795 of 1,800 tokens: make room, or raise the budget
-  to the measured size with the reason. Done: one rule for every helper (continue its session with
-  the gap stated; do not do its work), the builder's second failure still going to the user;
-  `lead` 1,799 tokens, within its budget. opencode resumes a failed child too, with a fresh
-  step count (`core/src/tool/plugin/subagent.ts:160-215`, `session/runner/llm.ts:65`)
-- [x] Tiago: Checks: unit and integration suites on 2.2.5 and on 2.2.6, which users already
-  run; a new eval case, `designer-limit`, whose settings give the designer a low step limit:
-  the designer reports at the limit, `spec.md` exists, and `lead` continues the designer's
-  session rather than designing itself; it passes on the stand-in, then once on real models
-  with the owner's approval of the quota. So far: 70 of 70 integration tests on 2.2.5; on 2.2.6, 68 of
-  70, the two that fail also failing with 0.9.0 (see Follow-ups); `designer-limit` passes on
-  the stand-in, which refuses an assistant prefill, and once on real models for $1.98: the
-  designer reached its limit of 12 and reported with no request refused, and `lead` continued
-  the same session to finish (`evals/results/step-limit.md`)
-- [ ] Tiago: Release when asked
+- [x] Tiago: `lead` continues a helper that failed or stopped at its step limit: it resumes that
+  helper's session (the session ID its result gives) with a short brief to finish and report,
+  rather than doing the work itself; this widens the retry rules that now cover only the builder
+  and the scout. `lead` is at 1,795 of 1,800 tokens: make room, or raise the budget to the
+  measured size with the reason. Done: one rule for every helper (continue its session with the
+  gap stated; do not do its work), the builder's second failure still going to the user; `lead`
+  1,799 tokens, within its budget. opencode resumes a failed child too, with a fresh step count
+  (`core/src/tool/plugin/subagent.ts:160-215`, `session/runner/llm.ts:65`)
+- [x] Tiago: Checks: unit and integration suites on 2.2.5 and on 2.2.6, which users already run;
+  a new eval case, `designer-limit`, whose settings give the designer a low step limit: the
+  designer reports at the limit, `spec.md` exists, and `lead` continues the designer's session
+  rather than designing itself; it passes on the stand-in, then once on real models with the
+  owner's approval of the quota. So far: 70 of 70 integration tests on 2.2.5; on 2.2.6, 68 of
+  70, the two that fail also failing with 0.9.0 (see Follow-ups); `designer-limit` passes on the
+  stand-in, which refuses an assistant prefill, and once on real models for $1.98: the designer
+  reached its limit of 12 and reported with no request refused, and `lead` continued the same
+  session to finish (`evals/results/step-limit.md`)
+- [x] Tiago: Release when asked: 0.9.1, the GitHub release and
+  `@ecmwf.int/multi-agents@0.9.1` on npm with provenance
 
 Exit: `make check` and the integration suites pass on 2.2.5 and 2.2.6; a harness helper on
 Claude Opus 5.5 that reaches its step limit reports; a designer cut off at its limit leaves a
@@ -944,6 +945,18 @@ spec; `lead` continues a failed helper instead of redoing its work.
   review is held back...", "a message sent between the switch to the reviewer and its
   brief..."), with 0.9.0 as well, and pass on 2.2.5. Find what 2.2.6 changed, fix it, then
   move the pin to 2.2.6
+
+- [ ] `lead` offers to raise a helper's step limit when helpers keep reaching it: when a
+  helper reaches its step limit again in the same session (its report says so: opencode's
+  notice asks it to state that the limit was reached), `lead` asks the user with the
+  question tool whether to raise `agents.<id>.steps` in a settings file, giving the current
+  limit, a suggested new one and what it costs (more steps, more tokens), and noting that it
+  takes effect after opencode restarts. Only with the user's approval does `lead` change the
+  file: the project's `.opencode/ecmwf-multi-agents.jsonc`, or the user's own for every
+  project. To settle: what counts as repeatedly (twice in a session, or across tasks of a
+  plan); how `lead` learns the current limit (the plugin could say it in the helper's line,
+  or `lead` could read the settings files); room in `lead`'s prompt, at 1,799 of 1,800 tokens.
+  Tests first; an eval in which the designer reaches a low limit twice and `lead` asks
 
 ## Open questions
 
