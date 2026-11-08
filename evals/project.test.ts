@@ -340,6 +340,16 @@ describe("every case's setup on the fixture", () => {
   });
 });
 
+describe("designer-limit", () => {
+  test("switches the designer on with a low step limit, and checks that lead continues it rather than designing itself", () => {
+    const item = CASES.find((candidate) => candidate.id === "designer-limit")!;
+    const settings = item.setup.find((step) => step.kind === "write" && step.path === ".opencode/ecmwf-multi-agents.jsonc");
+    expect(settings?.kind === "write" && JSON.parse(settings.content)).toEqual({ agents: { designer: { enabled: true, steps: 12 } } });
+    expect(item.checks.map((check) => check.id)).toEqual(["designer-sessions", "designer-no-errors", "designer-continued", "spec", "lead-not-written", "no-changes"]);
+    expect(item.baseline).toBe(false);
+  });
+});
+
 describe("data-question", () => {
   test("checks that the computation was kept as a script in the data scientist's folder", () => {
     const item = CASES.find((candidate) => candidate.id === "data-question")!;

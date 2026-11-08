@@ -17,6 +17,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
   Opus 5.5, now reports what it has instead of failing with "This model does not support
   assistant message prefill": the plugin sends opencode's step-limit notice as a user message.
 
+### Changed
+
+- `lead` continues a helper that failed, stopped at its step limit or left its task partly
+  done, in the same session, instead of doing its work itself; the designer starts its spec
+  early, so a design cut off at the limit still leaves one.
+
 ## [0.9.0] - 2026-11-08
 
 ### Changed

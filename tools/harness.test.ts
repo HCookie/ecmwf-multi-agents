@@ -187,6 +187,14 @@ describe("lead", () => {
     }
   });
 
+  test("continues a helper that failed, stopped at its step limit or left its task partly done, instead of doing its work", () => {
+    const helpers = /## Helpers\n\n([\s\S]*?)\n\n## /.exec(agent("lead").prompt)?.[1] ?? "";
+    expect(helpers).toContain("When a helper fails, stops at its step limit or leaves its task partly done, continue its session");
+    expect(helpers).toContain("Do not do its work yourself.");
+    // The builder's second failure still goes to the user.
+    expect(helpers).toContain("If a builder fails again, take it to the user");
+  });
+
   test("asks the user only through the question tool, and states each option's pros and cons in a few words", () => {
     const asking = /## Asking the user\n\n([\s\S]*?)\n\n##/.exec(agent("lead").prompt)?.[1] ?? "";
     expect(asking).toContain("Ask the user through the question tool, never in your reply");

@@ -8,6 +8,7 @@ import {
   answeredDuringPlan,
   answersInline,
   changedOnlyIn,
+  helperContinued,
   committedLocally,
   completionsWakeLead,
   finishedWithin,
@@ -15,8 +16,10 @@ import {
   isPushAttempt,
   listsPublicFunctions,
   noChanges,
+  noErrorsFrom,
   noHelperGitWrites,
   notReadWhole,
+  notWrittenBy,
   noWorkaround,
   onboardChecks,
   onlyChanged,
@@ -493,5 +496,37 @@ describe("helpers switched on and off", () => {
     expect(run(check, context({ changedFiles: ["tests/test_units.py", ".ecmwf-multi-agents/issues/a.md"] }))).toEqual({ pass: true, detail: "changed: tests/test_units.py" });
     expect(run(check, context({ changedFiles: [".ecmwf-multi-agents/issues/a.md"] }))).toEqual({ pass: true, detail: "no project file changed" });
     expect(run(check, context({ changedFiles: ["tests/test_units.py", "stations/units.py"] }))).toEqual({ pass: false, detail: "also changed: stations/units.py" });
+  });
+});
+
+describe("a helper continued after its step limit", () => {
+  const subagent = (input: Record<string, unknown>, status = "completed"): ToolCall => ({ sessionID: "root", agent: "lead", tool: "subagent", status, input });
+
+  test("lead continued the helper's session: a delegation naming its session", () => {
+    const check = helperContinued("designer");
+    expect(check.variants).toEqual(["harness"]);
+    const first = subagent({ agent: "designer", description: "d", prompt: "p" });
+    expect(run(check, context({ calls: [first, subagent({ agent: "designer", sessionID: "ses_d", prompt: "Finish." })] }))).toEqual({ pass: true, detail: "1 continuation(s)" });
+    expect(run(check, context({ calls: [first, subagent({ agent: "designer", description: "again", prompt: "p" })] }))).toEqual({ pass: false, detail: "lead never continued a designer session" });
+    expect(run(check, context({ calls: [subagent({ agent: "scout", sessionID: "ses_s", prompt: "p" })] })).pass).toBe(false);
+    expect(run(check, context({ calls: [subagent({ agent: "designer", sessionID: "ses_d", prompt: "p" }, "error")] })).pass).toBe(false);
+  });
+
+  test("an agent ended no request in an error", () => {
+    const check = noErrorsFrom("designer");
+    expect(run(check, context())).toEqual({ pass: true, detail: "none" });
+    const ctx = context();
+    ctx.metrics.errors.push("designer: This model does not support assistant message prefill.");
+    expect(run(check, ctx)).toEqual({ pass: false, detail: "designer: This model does not support assistant message prefill." });
+    const other = context();
+    other.metrics.errors.push("scout: rate limited");
+    expect(run(check, other).pass).toBe(true);
+  });
+
+  test("an agent wrote no file under a folder with its write, edit or patch tools", () => {
+    const check = notWrittenBy("lead", "lead wrote no design file", ".ecmwf-multi-agents/design");
+    const write = (agent: string, file: string): ToolCall => ({ sessionID: "s", agent, tool: "write", status: "completed", input: { path: file, content: "x" } });
+    expect(run(check, context({ calls: [write("designer", "/project/.ecmwf-multi-agents/design/a/spec.md"), write("lead", "/project/.ecmwf-multi-agents/plans/p.md")] }))).toEqual({ pass: true, detail: "none" });
+    expect(run(check, context({ calls: [write("lead", ".ecmwf-multi-agents/design/a/spec.md")] }))).toEqual({ pass: false, detail: "lead wrote .ecmwf-multi-agents/design/a/spec.md" });
   });
 });

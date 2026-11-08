@@ -12,6 +12,7 @@ import {
   answersInline,
   backgroundHandoffs,
   changedOnlyIn,
+  helperContinued,
   committedLocally,
   completionsWakeLead,
   finishedWithin,
@@ -20,8 +21,10 @@ import {
   hiddenTestsPass,
   listsPublicFunctions,
   noChanges,
+  noErrorsFrom,
   noHelperGitWrites,
   notReadWhole,
+  notWrittenBy,
   noWorkaround,
   onboardChecks,
   overlappingHandoffs,
@@ -146,10 +149,14 @@ const RANGE_TERMS: Term[] = [
 
 const RANGE_QUESTION = "While that runs: in one sentence, what temperature range does the quality check accept? Do not change any files.";
 
+/** A project settings file with per-agent settings, such as `enabled` and `steps`. */
+export function projectAgents(agents: Record<string, Record<string, unknown>>): SetupStep {
+  return { kind: "write", path: ".opencode/ecmwf-multi-agents.jsonc", content: `${JSON.stringify({ agents }, null, 2)}\n` };
+}
+
 /** A project settings file that switches helpers on or off (ADR 0005). */
 export function switches(agents: Record<string, boolean>): SetupStep {
-  const entries = Object.fromEntries(Object.entries(agents).map(([id, enabled]) => [id, { enabled }]));
-  return { kind: "write", path: ".opencode/ecmwf-multi-agents.jsonc", content: `${JSON.stringify({ agents: entries }, null, 2)}\n` };
+  return projectAgents(Object.fromEntries(Object.entries(agents).map(([id, enabled]) => [id, { enabled }])));
 }
 
 const BUG_FIX_SETUP: SetupStep[] = [
@@ -705,6 +712,30 @@ export const CASES: EvalCase[] = [
         { label: "experiments", any: [/EXPERIMENTS:/] },
         { label: "confidence", any: [/CONFIDENCE:/] },
       ]),
+      noChanges(WORK_FILES, "no project file changed (work files allowed)"),
+    ],
+    baseline: false,
+  },
+  {
+    id: "designer-limit",
+    title: "With designer on and a low step limit: it reports at the limit with a spec started, and lead continues its session rather than designing itself",
+    setup: [projectAgents({ designer: { enabled: true, steps: 12 } })],
+    turns: [
+      {
+        turn: {
+          kind: "prompt",
+          text:
+            "Design a web page that compares two stations' daily summaries side by side: pick the two stations and a date range, " +
+            "see both tables with their differences, and switch the unit. I want the design and a prototype I can open in a browser; do not change the package.",
+        },
+      },
+    ],
+    checks: [
+      helperSessions("designer", 1),
+      noErrorsFrom("designer"),
+      helperContinued("designer"),
+      workFiles("spec", "a spec was written", /^\.ecmwf-multi-agents\/design\/[^/]+\/spec\.md$/),
+      notWrittenBy("lead", "lead wrote no design file itself", ".ecmwf-multi-agents/design"),
       noChanges(WORK_FILES, "no project file changed (work files allowed)"),
     ],
     baseline: false,

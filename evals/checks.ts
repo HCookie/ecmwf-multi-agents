@@ -796,3 +796,48 @@ export function changedOnlyIn(id: string, title: string, allowed: RegExp): Check
     },
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Helpers at their step limit
+
+/** lead continued a session of the helper: a completed delegation to it naming a session. */
+export function helperContinued(agent: string): Check {
+  return {
+    id: `${agent}-continued`,
+    title: `lead continued the ${agent}'s session`,
+    variants: ["harness"],
+    run(ctx) {
+      const calls = completedCalls(ctx, "lead", "subagent", (input) => input.agent === agent && typeof input.sessionID === "string" && input.sessionID !== "");
+      return calls.length > 0 ? ok(`${calls.length} continuation(s)`) : fail(`lead never continued a ${agent} session`);
+    },
+  };
+}
+
+/** No request of the agent ended in an error, such as a model refusing the request. */
+export function noErrorsFrom(agent: string): Check {
+  return {
+    id: `${agent}-no-errors`,
+    title: `no request of ${agent} ended in an error`,
+    run(ctx) {
+      const found = ctx.metrics.errors.find((error) => error.startsWith(`${agent}: `));
+      return found === undefined ? ok("none") : fail(found);
+    },
+  };
+}
+
+/** The agent wrote no file under a folder of the project with its write, edit or patch tools. */
+export function notWrittenBy(agent: string, title: string, folder: string): Check {
+  return {
+    id: `${agent}-not-written`,
+    title,
+    run(ctx) {
+      const dir = path.join(ctx.project, folder);
+      for (const call of ctx.metrics.toolCalls) {
+        if (call.agent !== agent) continue;
+        const file = writtenPaths(call, ctx.project, ctx.setup.home).find((item) => within(dir, item));
+        if (file !== undefined) return fail(`${agent} wrote ${path.relative(ctx.project, file)}`);
+      }
+      return ok("none");
+    },
+  };
+}

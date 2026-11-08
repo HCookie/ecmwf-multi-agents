@@ -51,9 +51,30 @@ function agentOf(system: string): string {
 const RANGE_ANSWER = "Readings from -90 to 60 degrees Celsius are valid. Readings outside that range are rejected: left out of the summaries and counted.";
 
 /** The script: what each agent does, by the conversation's user text and tool results so far. */
-function script(agent: string, users: string[], results: number): Action {
+function script(agent: string, users: string[], results: number, tools: { texts: string[]; sinceUser: number } = { texts: [], sinceUser: 0 }): Action {
   const all = users.join("\n");
   const last = users.at(-1) ?? "";
+  // designer-limit: the designer reaches its step limit with its spec started, and lead continues it.
+  if (agent === "designer" && last.includes("CRITICAL - MAXIMUM STEPS REACHED")) {
+    return { text: "STATUS: PARTIAL\nSPEC: .ecmwf-multi-agents/design/compare/spec.md\nPROTOTYPE: not built yet\nNOT CHECKED: the prototype" };
+  }
+  if (agent === "designer" && all.includes("FINISH_DESIGN")) {
+    if (tools.sinceUser === 0) return { tool: "write", args: { path: ".ecmwf-multi-agents/design/compare/index.html", content: "<!doctype html><title>Compare</title>\n" } };
+    return { text: "STATUS: DONE\nSPEC: .ecmwf-multi-agents/design/compare/spec.md\nPROTOTYPE: .ecmwf-multi-agents/design/compare/index.html" };
+  }
+  if (agent === "designer" && all.includes("DESIGN_COMPARE")) {
+    if (results === 0) return { tool: "write", args: { path: ".ecmwf-multi-agents/design/compare/spec.md", content: "# Compare two stations\n\nGoal, users and flow.\n" } };
+    return { tool: "glob", args: { pattern: "*" } };
+  }
+  if (agent === "lead" && all.includes("compares two stations")) {
+    const report = tools.texts.at(-1) ?? "";
+    if (results === 0) return { tool: "subagent", args: { agent: "designer", description: "design the comparison page", prompt: "DESIGN_COMPARE: design the station comparison page." } };
+    const session = /sessionID="([^"]+)"/.exec(report)?.[1];
+    if (results === 1 && report.includes("STATUS: PARTIAL") && session !== undefined) {
+      return { tool: "subagent", args: { agent: "designer", sessionID: session, description: "finish the design", prompt: "FINISH_DESIGN: finish the prototype and report." } };
+    }
+    return { text: "The designer finished the spec and the prototype." };
+  }
   if (all.includes("LOOP_FOREVER")) return { tool: "shell", args: { command: "sleep 1", description: "wait" } };
   if (agent === "title") return { text: "Stand-in title" };
   if (agent === "lead" && last.startsWith("<subagent ")) {
@@ -130,7 +151,14 @@ function standInModel() {
       const users = messages.filter((message) => message.role === "user").map(textOf);
       const results = messages.filter((message) => message.role === "tool").length;
       const agent = agentOf(system);
-      const action = script(agent, users, results);
+      // Like a model without assistant prefill (Claude Opus 5.5): a request must end with a user message.
+      if (messages.at(-1)?.role === "assistant") {
+        return Response.json({ error: { type: "invalid_request_error", message: "This model does not support assistant message prefill." } }, { status: 400 });
+      }
+      const lastUser = messages.map((message) => message.role).lastIndexOf("user");
+      const texts = messages.filter((message) => message.role === "tool").map(textOf);
+      const sinceUser = messages.slice(lastUser + 1).filter((message) => message.role === "tool").length;
+      const action = script(agent, users, results, { texts, sinceUser });
       seen.push(`${agent}:${"tool" in action ? action.tool : "text"}`);
       if (!body.stream) {
         const text = "text" in action ? action.text : "ok";
@@ -315,6 +343,22 @@ describe.skipIf(!enabled)(`eval runner end to end (${name}, stand-in model)`, ()
     expect(record.metrics.childSessions).toEqual({ tester: 1 });
     expect(record.metrics.agents.tester!.toolsByName).toEqual({ write: 2 });
     expect(record.changedFiles.sort()).toEqual([".ecmwf-multi-agents/issues/fahrenheit-to-celsius.md", "tests/test_units_break.py"]);
+    expect(record.pass).toBe(true);
+  }, 400_000);
+
+  test("harness, designer-limit: the designer reports at its step limit with its spec started, and lead continues its session", async () => {
+    const record = keep(await runCase(byId("designer-limit"), options("harness")));
+    expect(record.error).toBeUndefined();
+    expect(record.checks.map((check) => [check.id, check.pass])).toEqual([
+      ["designer-sessions", true],
+      ["designer-no-errors", true],
+      ["designer-continued", true],
+      ["spec", true],
+      ["lead-not-written", true],
+      ["no-changes", true],
+    ]);
+    expect(record.metrics.childSessions).toEqual({ designer: 1 });
+    expect(record.changedFiles.sort()).toEqual([".ecmwf-multi-agents/design/compare/index.html", ".ecmwf-multi-agents/design/compare/spec.md"]);
     expect(record.pass).toBe(true);
   }, 400_000);
 

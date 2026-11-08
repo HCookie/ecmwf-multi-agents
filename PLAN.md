@@ -892,11 +892,14 @@ tests come first in every task.
   them, then each screen, state and decision as it goes, so a cut-off still leaves a spec;
   within the helper budget. Done: the spec starts with the flow, before the prototype;
   the designer's prompt is 725 tokens (750)
-- [~] Tiago: `lead` continues a helper that failed or stopped at its step limit: it resumes
+- [x] Tiago: `lead` continues a helper that failed or stopped at its step limit: it resumes
   that helper's session (the session ID its result gives) with a short brief to finish and
   report, rather than doing the work itself; this widens the retry rules that now cover only
   the builder and the scout. `lead` is at 1,795 of 1,800 tokens: make room, or raise the budget
-  to the measured size with the reason
+  to the measured size with the reason. Done: one rule for every helper (continue its session with
+  the gap stated; do not do its work), the builder's second failure still going to the user;
+  `lead` 1,799 tokens, within its budget. opencode resumes a failed child too, with a fresh
+  step count (`core/src/tool/plugin/subagent.ts:160-215`, `session/runner/llm.ts:65`)
 - [~] Tiago: Checks: unit and integration suites on 2.2.5 and on 2.2.6, which users already
   run; a new eval case, `designer-limit`, whose settings give the designer a low step limit:
   the designer reports at the limit, `spec.md` exists, and `lead` continues the designer's
