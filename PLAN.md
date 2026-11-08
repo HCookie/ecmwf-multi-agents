@@ -904,7 +904,9 @@ tests come first in every task.
   run; a new eval case, `designer-limit`, whose settings give the designer a low step limit:
   the designer reports at the limit, `spec.md` exists, and `lead` continues the designer's
   session rather than designing itself; it passes on the stand-in, then once on real models
-  with the owner's approval of the quota
+  with the owner's approval of the quota. So far: 70 of 70 integration tests on 2.2.5; on 2.2.6, 68 of
+  70, the two that fail also failing with 0.9.0 (see Follow-ups); `designer-limit` passes on
+  the stand-in, which refuses an assistant prefill
 - [ ] Tiago: Release when asked
 
 Exit: `make check` and the integration suites pass on 2.2.5 and 2.2.6; a harness helper on
@@ -933,6 +935,13 @@ spec; `lead` continues a failed helper instead of redoing its work.
   signatures` verifies the signature and the attestation; `npm install -g` then
   `ecmwf-multi-agents` installs 20 files with no version warning and records 0.7.1, and
   `doctor` finds no problems (`lead` is the harness's, the plugin 0.7.1 active)
+
+- [ ] opencode 2.2.6: a message the user sends while `/review` runs inline reaches the
+  reviewer instead of waiting for `lead` after the review. Two tests of
+  `plugin/background.integration.test.ts` fail on 2.2.6 ("a message the user sends during a
+  review is held back...", "a message sent between the switch to the reviewer and its
+  brief..."), with 0.9.0 as well, and pass on 2.2.5. Find what 2.2.6 changed, fix it, then
+  move the pin to 2.2.6
 
 ## Open questions
 
