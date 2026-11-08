@@ -20,6 +20,8 @@ export interface EmbeddedHarness {
   skills: EmbeddedSkill[];
   /** Added to the default agent's helper list when a helper that is on by default is switched off. */
   helperOff?: string;
+  /** What each review policy means; the line after `Review policy:` says the one in force. */
+  reviewPolicies?: Record<ReviewPolicy, string>;
 }
 
 export interface EmbeddedProfile {

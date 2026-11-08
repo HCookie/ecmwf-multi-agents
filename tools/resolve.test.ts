@@ -372,6 +372,27 @@ describe("review policy line", () => {
     ]);
   });
 
+  const MEANINGS = { auto: "Plans and changes are reviewed.", ask: "Ask first.", always: "Everything is reviewed.", never: "Only on request." };
+
+  test("with the policies' meanings in the manifest, the line after the policy is the default's meaning, which the harness keeps", async () => {
+    const manifest = edited((m) => {
+      m.reviewPolicies = MEANINGS;
+    });
+    const problemsWith = async (lead: string) => {
+      const source = await sourceOf({ manifest, markdown: { "agents/lead.md": lead } });
+      return reviewPolicyProblems(source, resolveHarness(source));
+    };
+    expect(await problemsWith("You are lead.\n\nReview policy: auto\nPlans and changes are reviewed.\n\nMore.")).toEqual([]);
+    const source = await sourceOf({ manifest, markdown: { "agents/lead.md": "Review policy: auto\nPlans and changes are reviewed." } });
+    expect(resolveHarness(source).reviewPolicies).toEqual(MEANINGS);
+    expect(resolveHarness(await sourceOf())).not.toHaveProperty("reviewPolicies");
+    for (const lead of ["Review policy: auto\n", "Review policy: auto\n\nPlans and changes are reviewed.", "Review policy: auto\nOnly on request."]) {
+      expect(await problemsWith(lead)).toEqual([
+        'src/agents/lead.md: agents.lead.prompt: the line after "Review policy: auto" must be the meaning of auto in the manifest\'s reviewPolicies, "Plans and changes are reviewed."; the plugin replaces it with the meaning of the policy in force',
+      ]);
+    }
+  });
+
   test("resolve reports budget, review and helper list problems together", async () => {
     const m = edited((m) => {
       m.budgets.command = 3;

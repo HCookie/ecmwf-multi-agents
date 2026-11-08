@@ -153,7 +153,7 @@ export function leadChanges(lead: V2AgentInfo, harness: EmbeddedHarness, setting
   applyAgent(expected, embedded, home);
   if (typeof expected.system === "string") {
     const on = enabledHelpers(harness, settings);
-    expected.system = rewriteReviewLine(expected.system, effectiveReview(harness, settings, on), embedded.id).prompt ?? expected.system;
+    expected.system = rewriteReviewLine(expected.system, effectiveReview(harness, settings, on), embedded.id, harness.reviewPolicies).prompt ?? expected.system;
     expected.system = rewriteHelperSlotsLine(expected.system, settings.maxHelperSlots, embedded.id).prompt ?? expected.system;
     if (helpersSwitched(harness, on)) expected.system = rewriteHelperList(expected.system, helpersOf(harness), on, harness.helperOff, embedded.id).prompt ?? expected.system;
   }

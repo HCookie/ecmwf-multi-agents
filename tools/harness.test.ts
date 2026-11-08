@@ -147,6 +147,18 @@ describe("the optional helpers", () => {
 });
 
 describe("lead", () => {
+  test("carries the meaning of the review policy in force only, and each meaning stands on its own", () => {
+    const meanings = harness.reviewPolicies!;
+    expect(Object.keys(meanings)).toEqual(["auto", "ask", "always", "never"]);
+    const prompt = agent("lead").prompt;
+    expect(prompt).toContain(`\nReview policy: auto\n${meanings.auto}\n`);
+    for (const policy of ["ask", "always", "never"] as const) expect([policy, prompt.includes(meanings[policy])]).toEqual([policy, false]);
+    expect(prompt).not.toMatch(/^- (auto|ask|always|never): /m);
+    for (const [policy, meaning] of Object.entries(meanings)) {
+      expect([policy, /\b(auto|ask|always|never)\b/.test(meaning)]).toEqual([policy, false]);
+    }
+  });
+
   test("says when to use the helper tools, and their own descriptions say how, so the prompt need not repeat it", () => {
     const prompt = agent("lead").prompt;
     expect(prompt).toContain("Use `helpers_status`, `helpers_steer` and `helpers_cancel` only when the user asks or a helper is off its brief, never to wait or poll.");

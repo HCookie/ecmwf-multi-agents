@@ -4,7 +4,8 @@
 import { describe, expect, test } from "bun:test";
 import { applyToV2Agents, helperSlotsLine, planAgents, rewriteHelperSlotsLine, rewriteReviewLine } from "./apply.ts";
 import { mergeSettings } from "./settings.ts";
-import { HELPER_OFF, LEAD_PROMPT, TESTER_ROUTING, embeddedFixture, resolvedFixture } from "./testing.ts";
+import { HELPER_OFF, LEAD_PROMPT, REVIEW_MEANINGS, TESTER_ROUTING, embeddedFixture, resolvedFixture } from "./testing.ts";
+import { REVIEW_POLICIES } from "./types.ts";
 import type { Settings, SettingsFile, V2AgentEditor, V2AgentInfo } from "./types.ts";
 
 const harness = embeddedFixture();
@@ -130,6 +131,23 @@ describe("rewriteReviewLine", () => {
     expect(rewriteReviewLine("Review policy: auto\nReview policy: ask", "never", "lead").problem).toBe(
       'the prompt of lead has 2 "Review policy:" lines instead of one, so none was changed',
     );
+  });
+
+  test("with the policies' meanings, the line after it says what the policy in force means", () => {
+    const always = rewriteReviewLine(LEAD_PROMPT, "always", "lead", REVIEW_MEANINGS).prompt!;
+    expect(always).toBe(LEAD_PROMPT.replace(`Review policy: auto\n${REVIEW_MEANINGS.auto}\n`, `Review policy: always\n${REVIEW_MEANINGS.always}\n`));
+    // From any policy to any other and back, the text does not drift.
+    for (const policy of REVIEW_POLICIES) {
+      const once = rewriteReviewLine(always, policy, "lead", REVIEW_MEANINGS).prompt!;
+      expect(once).toContain(`Review policy: ${policy}\n${REVIEW_MEANINGS[policy]}\n`);
+      expect(rewriteReviewLine(once, "auto", "lead", REVIEW_MEANINGS).prompt).toBe(LEAD_PROMPT);
+    }
+    expect(rewriteReviewLine(`a\r\nReview policy: auto\r\n${REVIEW_MEANINGS.auto}\r\nb`, "never", "lead", REVIEW_MEANINGS).prompt).toBe(
+      `a\r\nReview policy: never\r\n${REVIEW_MEANINGS.never}\r\nb`,
+    );
+    // A next line that is none of the harness's meanings is the user's own: kept.
+    expect(rewriteReviewLine("Review policy: auto\nMy own words.", "never", "lead", REVIEW_MEANINGS).prompt).toBe("Review policy: never\nMy own words.");
+    expect(rewriteReviewLine("Review policy: auto", "never", "lead", REVIEW_MEANINGS).prompt).toBe("Review policy: never");
   });
 });
 
@@ -263,7 +281,7 @@ describe("applyToV2Agents with helpers switched on and off", () => {
   test("with the reviewer off nothing is reviewed; a policy a file chose is reported", () => {
     const quiet = v2Editor();
     expect(apply(quiet, { agents: { reviewer: { enabled: false } } })).toEqual([]);
-    expect(quiet.get("lead")!.system).toContain("\nReview policy: never\n");
+    expect(quiet.get("lead")!.system).toContain(`\nReview policy: never\n${REVIEW_MEANINGS.never}\n`);
     expect(quiet.agents.has("reviewer")).toBe(false);
 
     const editor = v2Editor();

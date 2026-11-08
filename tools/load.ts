@@ -10,6 +10,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { type Node, type ParseError, parseTree, printParseErrorCode } from "jsonc-parser";
 import { EFFORT_PATTERN, MODEL_PATTERN } from "../plugin/settings.ts";
+import { REVIEW_POLICIES, type ReviewPolicy } from "../plugin/types.ts";
 import { ACTIONS, PLATFORM_TOOL_IDS, TOOL_ID, type Action, type AgentMode, type Effect, type Profile, type ProfileAgent } from "./types.ts";
 import {
   compareBytes,
@@ -107,6 +108,8 @@ export interface Manifest {
   skills: SourceSkill[];
   /** The line the plugin adds to the default agent's helper list when a default helper is off. */
   helperOff?: string;
+  /** What each review policy means, one line each. */
+  reviewPolicies?: Record<ReviewPolicy, string>;
 }
 
 export interface Source {
@@ -133,6 +136,7 @@ const TOP_KEYS = [
   "commands",
   "skills",
   "helperOff",
+  "reviewPolicies",
 ];
 const TOP_REQUIRED = ["name", "defaultAgent", "defaultProfile", "workDir", "marker", "budgets", "agents"];
 const AGENT_KEYS = ["mode", "description", "prompt", "budget", "steps", "color", "permissions", "optional", "routing"];
@@ -479,6 +483,20 @@ function readLine(value: unknown, c: Checker, at: KeyPath): string | undefined {
   return text;
 }
 
+/** Each review policy's meaning, one line; undefined after reporting what is wrong, or when there are none. */
+function readReviewPolicies(value: unknown, c: Checker): Record<ReviewPolicy, string> | undefined {
+  if (value === undefined) return undefined;
+  const map = c.object(value, ["reviewPolicies"]);
+  if (map === undefined) return undefined;
+  c.keys(map, ["reviewPolicies"], REVIEW_POLICIES, REVIEW_POLICIES);
+  const out: Partial<Record<ReviewPolicy, string>> = {};
+  for (const policy of REVIEW_POLICIES) {
+    const meaning = readLine(map[policy], c, ["reviewPolicies", policy]);
+    if (meaning !== undefined) out[policy] = meaning;
+  }
+  return REVIEW_POLICIES.every((policy) => out[policy] !== undefined) ? (out as Record<ReviewPolicy, string>) : undefined;
+}
+
 /** The routing entry an optional helper needs and no other agent has. */
 function readRouting(id: string, entry: Record<string, unknown>, optional: boolean, c: Checker, at: KeyPath): string | undefined {
   const where = [...at, "routing"];
@@ -612,6 +630,7 @@ function readManifest(value: unknown, c: Checker, refs: MarkdownRef[]): Manifest
   if (marker !== "" && !marker.startsWith("#")) c.fail(["marker"], 'must start with "#", because it is written as a YAML comment');
   if (/[\r\n]/.test(marker)) c.fail(["marker"], "must be a single line");
   const helperOff = readLine(top.helperOff, c, ["helperOff"]);
+  const reviewPolicies = readReviewPolicies(top.reviewPolicies, c);
 
   const budgets = readBudgets(top.budgets, c);
   const ruleSets = readRuleSets(top.ruleSets, c);
@@ -649,6 +668,7 @@ function readManifest(value: unknown, c: Checker, refs: MarkdownRef[]): Manifest
 
   const manifest: Manifest = { name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills };
   if (helperOff !== undefined) manifest.helperOff = helperOff;
+  if (reviewPolicies !== undefined) manifest.reviewPolicies = reviewPolicies;
   return manifest;
 }
 

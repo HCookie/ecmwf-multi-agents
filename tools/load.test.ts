@@ -234,7 +234,7 @@ describe("JSONC", () => {
     const manifestText = JSON.stringify(manifest(), null, 2).replace('"name"', '"__proto__": { "x": 1 },\n  "name"');
     const problems = await problemsOf({ manifestText });
     expect(problems).toEqual([
-      "src/manifest.jsonc: __proto__: unknown key; allowed keys are name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills and helperOff",
+      "src/manifest.jsonc: __proto__: unknown key; allowed keys are name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills, helperOff and reviewPolicies",
     ]);
   });
 });
@@ -274,7 +274,7 @@ describe("unknown keys", () => {
     });
     const profile = { description: "Default.", agents: { lead: { model: "acme/big-1", variant: "high" } } };
     expect(await problemsOf({ manifest: m, profiles: { default: profile } })).toEqual([
-      "src/manifest.jsonc: version: unknown key; allowed keys are name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills and helperOff",
+      "src/manifest.jsonc: version: unknown key; allowed keys are name, defaultAgent, defaultProfile, workDir, marker, budgets, ruleSets, agents, commands, skills, helperOff and reviewPolicies",
       "src/manifest.jsonc: agents.builder.base: unknown key; allowed keys are mode, description, prompt, budget, steps, color, permissions, optional and routing",
       "src/profiles/default.jsonc: agents.lead.variant: unknown key; allowed keys are model and effort",
     ]);
@@ -518,6 +518,23 @@ describe("agents", () => {
       'src/manifest.jsonc: agents.drawer.routing: must not start with "-"; the plugin writes "- drawer: " before it',
       "src/manifest.jsonc: agents.quiet.routing: only an optional agent has a routing entry; the default agent's prompt lists the others",
     ]);
+  });
+
+  test("reviewPolicies gives each review policy's meaning in one line", async () => {
+    const meanings = { auto: "Plans and changes are reviewed.", ask: "Ask first.", always: "Everything is reviewed.", never: "Only on request." };
+    const good = await load(await fixture({ manifest: edited((m) => (m.reviewPolicies = meanings)) }));
+    expect(good.manifest.reviewPolicies).toEqual(meanings);
+    expect((await load(await fixture())).manifest.reviewPolicies).toBeUndefined();
+    const bad = edited((m) => {
+      m.reviewPolicies = { auto: "Two\nlines.", ask: 3, always: "Fine.", sometimes: "x" };
+    });
+    expect(await problemsOf({ manifest: bad })).toEqual([
+      "src/manifest.jsonc: reviewPolicies.sometimes: unknown key; allowed keys are auto, ask, always and never",
+      "src/manifest.jsonc: reviewPolicies.never: required key is missing",
+      "src/manifest.jsonc: reviewPolicies.auto: must be a single line",
+      "src/manifest.jsonc: reviewPolicies.ask: must be a non-empty string, not the number 3",
+    ]);
+    expect(await problemsOf({ manifest: edited((m) => (m.reviewPolicies = "auto")) })).toEqual(['src/manifest.jsonc: reviewPolicies: must be an object, not "auto"']);
   });
 
   test("optional helpers need the routing and lead-all budgets", async () => {

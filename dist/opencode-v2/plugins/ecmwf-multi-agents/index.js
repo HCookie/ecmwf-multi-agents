@@ -191,13 +191,23 @@ function rewriteHelperSlotsLine(prompt, slots, agent) {
   }
   return { prompt: prompt.replace(HELPER_SLOTS_LINE, `Run at most ${slots} ${slots === 1 ? "helper" : "helpers"} at once.`) };
 }
-function rewriteReviewLine(prompt, policy, agent) {
+function rewriteReviewLine(prompt, policy, agent, meanings) {
   const count = prompt.match(REVIEW_LINE)?.length ?? 0;
   if (count === 0)
     return { problem: `the prompt of ${agent} has no "Review policy:" line, so the review policy stays as the prompt says` };
   if (count > 1)
     return { problem: `the prompt of ${agent} has ${count} "Review policy:" lines instead of one, so none was changed` };
-  return { prompt: prompt.replace(REVIEW_LINE, `Review policy: ${policy}`) };
+  const lines = prompt.split(`
+`);
+  const at = lines.findIndex((line) => line.startsWith("Review policy:"));
+  const ending = (line) => line.endsWith("\r") ? "\r" : "";
+  lines[at] = `Review policy: ${policy}${ending(lines[at])}`;
+  const next = lines[at + 1];
+  if (meanings !== undefined && next !== undefined && Object.values(meanings).includes(next.replace(/\r$/, ""))) {
+    lines[at + 1] = `${meanings[policy]}${ending(next)}`;
+  }
+  return { prompt: lines.join(`
+`) };
 }
 function reviewProblem(harness, settings, problem) {
   return { message: `${harness.name}: ${problem}`, notify: settings.reviewSet };
@@ -266,7 +276,7 @@ function applyToV2Agents(editor, harness, settings, plans) {
       }));
     }
     if (typeof lead.system === "string") {
-      const result = rewriteReviewLine(lead.system, review, harness.defaultAgent);
+      const result = rewriteReviewLine(lead.system, review, harness.defaultAgent, harness.reviewPolicies);
       if (result.problem !== undefined)
         problems.push(reviewProblem(harness, settings, result.problem));
       const slots = rewriteHelperSlotsLine(result.prompt ?? lead.system, settings.maxHelperSlots, harness.defaultAgent);
@@ -1687,7 +1697,7 @@ function leadChanges(lead, harness, settings, home) {
   applyAgent(expected, embedded, home);
   if (typeof expected.system === "string") {
     const on = enabledHelpers(harness, settings);
-    expected.system = rewriteReviewLine(expected.system, effectiveReview(harness, settings, on), embedded.id).prompt ?? expected.system;
+    expected.system = rewriteReviewLine(expected.system, effectiveReview(harness, settings, on), embedded.id, harness.reviewPolicies).prompt ?? expected.system;
     expected.system = rewriteHelperSlotsLine(expected.system, settings.maxHelperSlots, embedded.id).prompt ?? expected.system;
     if (helpersSwitched(harness, on))
       expected.system = rewriteHelperList(expected.system, helpersOf(harness), on, harness.helperOff, embedded.id).prompt ?? expected.system;
@@ -2465,13 +2475,7 @@ Users are research scientists, analysts and software developers. Many are expert
 ## Review
 
 Review policy: auto
-
-The line above sets when the reviewer checks work:
-
-- auto: each plan before the user approves it, and each change beyond a trivial edit.
-- ask: before each review that auto would do, ask the user whether to do it.
-- always: every plan and every change.
-- never: only when the user asks.
+The reviewer checks each plan before the user approves it, and each change beyond a trivial edit.
 
 Review a change after it passes your own checks. Tell the reviewer the goal, the criteria, the checks and where the work is: for a plan, its path; for a change, the changed files, plus the plan's path if it came from one. On REJECT, get the blockers fixed (by a builder for a change, by you for a plan), then send the work back to the reviewer with its earlier blockers. After two such rounds, take the open blockers to the user. The user can run \`/review\` under any policy. Reports from \`/review\` and \`/progress\` arrive as a reply to the command's text here, or as a \`<subagent>\` message. If you explain one, be brief and do not re-run its checks; act on it only when the user asks.
 
@@ -2786,7 +2790,7 @@ Plans, notes, the onboarding summary and the optional helpers' folders (\`scratc
 - A model is missing: connect its provider with \`opencode auth login\`, or pick another profile, then restart opencode.
 - opencode starts on \`build\`, not \`lead\`: the plugin did not load, \`default_agent\` is false, or your opencode config names another default agent. Switch with \`/agents\`. Without the plugin the agents work with default settings.
 - To update, run \`git pull\` in the checkout and restart opencode.
-`, description: "User guide to the ecmwf-multi-agents harness: agents, commands, plans, review policy, settings and profiles. Use when the user asks how the harness works.", autoinvoke: false }], helperOff: "Helpers not in this list are switched off in this project: do their work yourself, also where a command or skill names them, but never review your own work: without the reviewer, say no independent review is available." });
+`, description: "User guide to the ecmwf-multi-agents harness: agents, commands, plans, review policy, settings and profiles. Use when the user asks how the harness works.", autoinvoke: false }], helperOff: "Helpers not in this list are switched off in this project: do their work yourself, also where a command or skill names them, but never review your own work: without the reviewer, say no independent review is available.", reviewPolicies: { auto: "The reviewer checks each plan before the user approves it, and each change beyond a trivial edit.", ask: "Ask the user before each review: of each plan before the user approves it, and of each change beyond a trivial edit.", always: "The reviewer checks every plan and every change.", never: "The reviewer checks work only when the user asks." } });
 export {
   plugin_default as default
 };

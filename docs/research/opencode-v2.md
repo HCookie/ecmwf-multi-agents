@@ -990,3 +990,28 @@ Questions behind optional and switchable helpers (ADR 0005), checked in the `v2.
    (`core/src/plugin/plan.ts:67`). Without `resume: false` it wakes the agent. Checked in a
    sandbox: the refused command answered 500 with the message, and the session had no message.
 
+## Addendum: the work folder in git's exclude file
+
+Questions behind the plugin adding `.ecmwf-multi-agents/` to git's exclude file at each session
+start, so that `lead`'s prompt no longer carries the rule. Checked in the `v2.2.5` source and
+with git 2 in a scratch folder.
+
+1. Does the plugin learn that a session starts, and where? Yes. `session.created` carries the
+   session's `location` and, for a child session, its `parentID`
+   (`v2.2.5: schema/src/session-event.ts:39-57`). A plugin's subscription only delivers events
+   of its own location: the bus filters each stream by the subscriber's location directory
+   (`core/src/bus.ts:729-745`). A session without `parentID` is the user's; helpers' sessions
+   have one.
+2. Which file? The one `git rev-parse --git-path info/exclude` names, found without running
+   git by walking up from the location's directory to the first `.git`:
+   - a folder: `.git/info/exclude`, also from a folder deep below the repository top;
+   - a file `gitdir: <path>` (a worktree or a submodule), with the path relative to the
+     folder that holds the file: in that git folder, `commondir` names the shared folder,
+     relative to it (`../..` for a worktree), and the file is `info/exclude` there; without
+     `commondir` (a submodule) it is the git folder's own `info/exclude`;
+   - no `.git` up to the root: outside git, nothing to do.
+   A repository made with `git init --template=` has no `info/` folder, so the plugin creates
+   it. Every case was compared with `git rev-parse --git-path info/exclude`.
+3. Can the plugin write it? The plugin runs in opencode's server process with Node's `fs`; it
+   has so far only read files (`plugin/environment.ts`). Writing one line to a file in `.git`
+   needs no permission from opencode, which asks only for agents' tool calls.

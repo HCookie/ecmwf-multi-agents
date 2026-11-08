@@ -293,6 +293,15 @@
     }
   },
 
+  // What each review policy means. lead's prompt says the one in force on the line after
+  // `Review policy: <policy>`: the generated prompt the default's, the plugin the setting's.
+  "reviewPolicies": {
+    "auto": "The reviewer checks each plan before the user approves it, and each change beyond a trivial edit.",
+    "ask": "Ask the user before each review: of each plan before the user approves it, and of each change beyond a trivial edit.",
+    "always": "The reviewer checks every plan and every change.",
+    "never": "The reviewer checks work only when the user asks."
+  },
+
   // Added to lead's helper list when a helper that is on by default is switched off.
   "helperOff": "Helpers not in this list are switched off in this project: do their work yourself, also where a command or skill names them, but never review your own work: without the reviewer, say no independent review is available.",
 

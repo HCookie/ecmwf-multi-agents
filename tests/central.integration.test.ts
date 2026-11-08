@@ -19,9 +19,14 @@ import { randomBytes } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { rewriteReviewLine } from "../plugin/apply.ts";
 import { V2_VERSION } from "../tools/emit-v2.ts";
+import { load } from "../tools/load.ts";
+import { resolveHarness } from "../tools/resolve.ts";
 
 const REPO = path.resolve(import.meta.dir, "..");
+/** What each review policy means, as the plugin writes it after the policy line. */
+const MEANINGS = resolveHarness(await load(REPO)).reviewPolicies!;
 const SANDBOX = path.join(REPO, "tools", "sandbox.sh");
 const INSTALL = path.join(REPO, "install.sh");
 const NAME = "ecmwf-multi-agents";
@@ -297,7 +302,8 @@ describe.skipIf(!v2Available)(`a central install in opencode ${V2_VERSION}`, () 
       const got = list.find((agent) => agent.id === id);
       const want = fromConfig.agents[id]!;
       const prompt = readFileSync(path.join(central, "prompts", `${id}.md`), "utf8").trim();
-      expect(got?.system).toBe(id === "lead" ? prompt.replace(/^Review policy: .*$/m, "Review policy: never") : prompt);
+      // The site settings choose never: the plugin rewrites the policy and its meaning.
+      expect(got?.system).toBe(id === "lead" ? rewriteReviewLine(prompt, "never", "lead", MEANINGS).prompt : prompt);
       expect({ description: got?.description, mode: got?.mode, color: got?.color, hidden: got?.hidden }).toEqual({
         description: want.description,
         mode: want.mode,

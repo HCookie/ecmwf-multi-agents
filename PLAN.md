@@ -818,17 +818,22 @@ exclude file. Measured at about 55 and 50 tokens. The plugin has so far only rea
 second change makes it write one line into a project's `.git`. Tests come first in every
 task, and the budgets go down to the measured sizes.
 
-- [~] Tiago: Research on 2.2.5: where the plugin learns that a session starts, and in which
+- [x] Tiago: Research on 2.2.5: where the plugin learns that a session starts, and in which
   folder (`session.created`, and the project root the plugin already finds); how to find the
   exclude file without running git (a `.git` folder; a worktree's `.git` file, its `gitdir:`
   line and `commondir`; a folder outside git); how the plugin writes a file. Addendum in
-  `docs/research/opencode-v2.md`
-- [~] Tiago: Only the active review policy's meaning: the four meanings move from `lead.md`
+  `docs/research/opencode-v2.md`: `session.created` carries the location and a child's
+  `parentID`, and a plugin's subscription only gets its own location's events; every git
+  layout matched `git rev-parse --git-path info/exclude`; `git init --template=` leaves no
+  `info/` folder
+- [x] Tiago: Only the active review policy's meaning: the four meanings move from `lead.md`
   to the manifest, and `lead`'s line becomes `Review policy: <policy>. <meaning>`, with the
   meaning of `ask` standing on its own (today it refers to `auto`). The generator checks the
   new line (`tools/resolve.ts`); the plugin rewrites the policy and its meaning together
   (`rewriteReviewLine` in `plugin/apply.ts`), also to `never` while the reviewer is off;
-  `doctor` and `install.sh doctor` compare and show the whole line
+  `doctor` and `install.sh doctor` compare and show the whole line. Done with the meaning on
+  the line after the policy, so `Review policy: <policy>` and `doctor`'s output stay as they
+  were; a next line of the user's own is kept. `lead` 1893 to 1845 tokens
 - [~] Tiago: The work folder in git's exclude file, by the plugin: at each session start in a
   git repository it appends `.ecmwf-multi-agents/` to the exclude file once (the owner chose
   session start, which covers what helpers write through the shell, at the cost of one line

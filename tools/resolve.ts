@@ -133,6 +133,7 @@ export function resolveHarness(source: Source): ResolvedHarness {
     profiles: source.profiles.map((candidate) => orderedProfile(candidate, manifest.agents)),
   };
   if (manifest.helperOff !== undefined) harness.helperOff = manifest.helperOff;
+  if (manifest.reviewPolicies !== undefined) harness.reviewPolicies = { ...manifest.reviewPolicies };
   return harness;
 }
 
@@ -266,6 +267,13 @@ export function reviewPolicyProblems(source: Source, harness: ResolvedHarness): 
   const line = matches[0] ?? "";
   if (line !== `${REVIEW_PREFIX}${DEFAULT_REVIEW_POLICY}`) {
     return [`${where}: has ${JSON.stringify(line)}; the generated prompt must say ${expected}, the default policy`];
+  }
+  // The plugin replaces the meaning after the line with the meaning of the policy in force.
+  const meaning = harness.reviewPolicies?.[DEFAULT_REVIEW_POLICY];
+  if (meaning !== undefined && lines[lines.indexOf(line) + 1] !== meaning) {
+    return [
+      `${where}: the line after ${expected} must be the meaning of ${DEFAULT_REVIEW_POLICY} in the manifest's reviewPolicies, ${JSON.stringify(meaning)}; the plugin replaces it with the meaning of the policy in force`,
+    ];
   }
   return [];
 }

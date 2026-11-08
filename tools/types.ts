@@ -5,6 +5,8 @@
 // core turns src/manifest.jsonc into a ResolvedHarness; the emitter turns a ResolvedHarness into
 // files for opencode 2. Emitters are pure functions.
 
+import type { ReviewPolicy } from "../plugin/types.ts";
+
 export type Effect = "allow" | "ask" | "deny";
 
 /** Neutral permission actions. The emitter maps them to opencode's names. */
@@ -136,6 +138,8 @@ export interface ResolvedHarness {
   profiles: Profile[];
   /** The line the plugin adds to the default agent's helper list when a default helper is off. */
   helperOff?: string;
+  /** What each review policy means, one line each; the default agent's prompt carries the one in force. */
+  reviewPolicies?: Record<ReviewPolicy, string>;
 }
 
 /** A generated file, with its path relative to the platform's dist directory. */

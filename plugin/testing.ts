@@ -78,8 +78,15 @@ const readOnlyShell = shell(
   "tree *",
 );
 
+export const REVIEW_MEANINGS = {
+  auto: "The reviewer checks each plan and each change beyond a trivial edit.",
+  ask: "Ask the user before each review of a plan or a change beyond a trivial edit.",
+  always: "The reviewer checks every plan and every change.",
+  never: "The reviewer checks work only when the user asks.",
+};
+
 export const LEAD_PROMPT =
-  "You are lead, the coordinating agent.\n\n## Review\n\nReview policy: auto\n\nThe line above sets when the reviewer checks work.\n\n" +
+  `You are lead, the coordinating agent.\n\n## Review\n\nReview policy: auto\n${REVIEW_MEANINGS.auto}\n\n` +
   "## Helpers\n\n- scout: reads and reports.\n- builder: makes one change.\n- reviewer: checks work.\n\n" +
   "Run at most 4 helpers at once. Run builders only on disjoint files.";
 
@@ -226,6 +233,7 @@ export function resolvedFixture(): ResolvedHarness {
       { id: "inherit", description: "Every agent uses the session model.", agents: {} },
     ],
     helperOff: HELPER_OFF,
+    reviewPolicies: { ...REVIEW_MEANINGS },
   } satisfies ResolvedHarness);
 }
 

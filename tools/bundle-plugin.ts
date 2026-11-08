@@ -172,6 +172,7 @@ export function embedHarness(harness: ResolvedHarness): EmbeddedHarness {
     profiles,
     ...embedFiles(harness),
     ...(harness.helperOff === undefined ? {} : { helperOff: harness.helperOff }),
+    ...(harness.reviewPolicies === undefined ? {} : { reviewPolicies: { ...harness.reviewPolicies } }),
   };
 }
 

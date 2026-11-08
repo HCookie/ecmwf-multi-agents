@@ -10,7 +10,7 @@ import { helpersOf, rewriteHelperList } from "../plugin/helper-list.ts";
 import { helperIds } from "../plugin/helpers.ts";
 import { inlineCommands } from "../plugin/inline.ts";
 import { DEFAULT_MAX_HELPER_SLOTS } from "../plugin/settings.ts";
-import { HELPER_OFF, resolvedFixture, TESTER_ROUTING } from "../plugin/testing.ts";
+import { HELPER_OFF, REVIEW_MEANINGS, resolvedFixture, TESTER_ROUTING } from "../plugin/testing.ts";
 import { HARNESS_CONSTANT, bundlePlugin, embedHarness, matterContent, pluginMarker, runtimeImports } from "./bundle-plugin.ts";
 import { load } from "./load.ts";
 import { resolveHarness } from "./resolve.ts";
@@ -136,7 +136,8 @@ describe("bundlePlugin", () => {
 describe("embedHarness", () => {
   test("keeps what the plugin needs: profiles, agents with their mode, and the helpers' commands", () => {
     const data = embedHarness(resolvedFixture());
-    expect(Object.keys(data)).toEqual(["name", "version", "defaultAgent", "defaultProfile", "profiles", "agents", "commands", "skills", "helperOff"]);
+    expect(Object.keys(data)).toEqual(["name", "version", "defaultAgent", "defaultProfile", "profiles", "agents", "commands", "skills", "helperOff", "reviewPolicies"]);
+    expect(data.reviewPolicies).toEqual(REVIEW_MEANINGS);
     expect(data.profiles.map((profile) => profile.id)).toEqual(["anthropic", "copilot", "default", "inherit"]);
     expect(data.profiles.find((profile) => profile.id === "default")!.agents).toEqual({
       lead: { model: "anthropic/claude-opus-5-5", effort: "xhigh" },

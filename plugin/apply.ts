@@ -78,16 +78,29 @@ export function rewriteHelperSlotsLine(
   return { prompt: prompt.replace(HELPER_SLOTS_LINE, `Run at most ${slots} ${slots === 1 ? "helper" : "helpers"} at once.`) };
 }
 
-/** Replace the one `Review policy: <value>` line; report instead when there is not exactly one. */
+/**
+ * Replace the one `Review policy: <value>` line, and the meaning on the line after it when that
+ * is one of the harness's meanings (a line of the user's own stays); report instead when there
+ * is not exactly one policy line.
+ */
 export function rewriteReviewLine(
   prompt: string,
   policy: ReviewPolicy,
   agent: string,
+  meanings?: Readonly<Record<ReviewPolicy, string>>,
 ): { prompt: string; problem?: undefined } | { prompt?: undefined; problem: string } {
   const count = prompt.match(REVIEW_LINE)?.length ?? 0;
   if (count === 0) return { problem: `the prompt of ${agent} has no "Review policy:" line, so the review policy stays as the prompt says` };
   if (count > 1) return { problem: `the prompt of ${agent} has ${count} "Review policy:" lines instead of one, so none was changed` };
-  return { prompt: prompt.replace(REVIEW_LINE, `Review policy: ${policy}`) };
+  const lines = prompt.split("\n");
+  const at = lines.findIndex((line) => line.startsWith("Review policy:"));
+  const ending = (line: string) => (line.endsWith("\r") ? "\r" : "");
+  lines[at] = `Review policy: ${policy}${ending(lines[at]!)}`;
+  const next = lines[at + 1];
+  if (meanings !== undefined && next !== undefined && Object.values(meanings).includes(next.replace(/\r$/, ""))) {
+    lines[at + 1] = `${meanings[policy]}${ending(next)}`;
+  }
+  return { prompt: lines.join("\n") };
 }
 
 function reviewProblem(harness: EmbeddedHarness, settings: Settings, problem: string): Problem {
@@ -175,7 +188,7 @@ export function applyToV2Agents(editor: V2AgentEditor, harness: EmbeddedHarness,
       );
     }
     if (typeof lead.system === "string") {
-      const result = rewriteReviewLine(lead.system, review, harness.defaultAgent);
+      const result = rewriteReviewLine(lead.system, review, harness.defaultAgent, harness.reviewPolicies);
       if (result.problem !== undefined) problems.push(reviewProblem(harness, settings, result.problem));
       const slots = rewriteHelperSlotsLine(result.prompt ?? lead.system, settings.maxHelperSlots, harness.defaultAgent);
       if (slots.problem !== undefined) problems.push({ message: `${harness.name}: ${slots.problem}`, notify: settings.maxHelperSlotsSet });

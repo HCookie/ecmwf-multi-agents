@@ -430,10 +430,12 @@ and `helpers_status` cannot see them. So for a plan still `in progress` from ano
 On REJECT, the builder fixes the blockers and the reviewer checks again, at most two rounds.
 After that, `lead` takes the open blockers to the user. `/review` works under every policy.
 
-The active policy appears in the `lead` prompt as one line, `Review policy: <value>`. The
-generator writes `auto`; the plugin rewrites the line from the settings file. With the
-reviewer switched off the line says `never`, and a settings file that chose another policy
-gets a warning.
+The active policy appears in the `lead` prompt as one line, `Review policy: <value>`, and the
+line after it says what that policy means, from the manifest's `reviewPolicies`; the prompt
+carries no other policy's meaning. The generator writes `auto` and its meaning; the plugin
+rewrites both lines from the settings file, and leaves a next line that is not one of the
+harness's meanings as it is. With the reviewer switched off the line says `never`, and a
+settings file that chose another policy gets a warning.
 
 ## Work files
 
