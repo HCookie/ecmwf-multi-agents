@@ -54,6 +54,7 @@ import { v2Reporter, type Reporter } from "./report.ts";
 import { ProblemLog, registerRpc } from "./rpc.ts";
 import { RuleOrder } from "./rule-order.ts";
 import { loadSettings, mergeSettings, type LoadedSettings } from "./settings.ts";
+import { stepLimitAsUser } from "./step-limit.ts";
 import { eventFields, SessionTracker, v2Tools } from "./tools-v2.ts";
 import type { EmbeddedHarness, Environment, Settings, V2AgentEditor, V2Cleanup, V2CommandEditor, V2Context, V2Event, V2Registration } from "./types.ts";
 
@@ -273,11 +274,14 @@ export function createSetup(harness: EmbeddedHarness, options: V2Options = {}) {
         },
       });
       if (typeof ctx.session?.hook === "function") {
+        const agentIds = new Set(harness.agents.map((agent) => agent.id));
         /** Replies whose held reports already have a wake queued, by session and request. */
         const woken = new Set<string>();
         await ctx.session.hook("context", async (event) => {
           // A session hook that throws cannot fail cleanly (core/src/plugin/hooks.ts:23-28).
           try {
+            // First, for any harness agent: at its step limit it still gets a turn to report.
+            if (typeof event?.agent === "string" && agentIds.has(event.agent) && Array.isArray(event.messages)) stepLimitAsUser(event.messages);
             // A helper answering a command here, else lead answering first: never both.
             if (await inline.context(event)) return;
             if (event?.agent !== harness.defaultAgent || !Array.isArray(event.messages)) return;

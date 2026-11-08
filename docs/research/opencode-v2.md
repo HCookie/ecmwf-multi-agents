@@ -1015,3 +1015,33 @@ with git 2 in a scratch folder.
 3. Can the plugin write it? The plugin runs in opencode's server process with Node's `fs`; it
    has so far only read files (`plugin/environment.ts`). Writing one line to a file in `.git`
    needs no permission from opencode, which asks only for agents' tool calls.
+
+## Addendum: helpers that reach their step limit
+
+Seen in a real session on opencode 2.2.6: the designer, on Claude Opus 5.5, reached its step
+limit of 60 and failed with "This model does not support assistant message prefill. The
+conversation must end with a user message." (HTTP 400). It wrote no report. Checked in the
+`v2.2.5` and `v2.2.6` source and binaries; opencode issues #56250 and #62641 report the bug.
+
+1. Where does it come from? At the step limit opencode sends one more request, with tools
+   off, whose messages end with its notice as an assistant message:
+   `[...transcript.messages, Message.assistant(MAX_STEPS_PROMPT)]`
+   (`v2.2.5: core/src/session/runner/llm.ts:263-266`, the notice in `max-steps.ts`; the same in
+   `v2.2.6`, lines 266-269, and on the development branch). A model that does not take an
+   assistant prefill refuses the request, so a helper on such a model never reports.
+2. Can the plugin change it? Yes. The `context` hook receives the request's messages after the
+   notice is added, and what it leaves there is what is sent (`core/src/session/model-
+   request.ts:263-310`). Hooks get the event object itself, not a copy
+   (`core/src/plugin/hooks.ts`, `plugin/src/promise/adapter.ts:625`), so the plugin edits the
+   list in place, as it already does for held reports.
+3. What message can the plugin put there? A plain `{ role: "user", content: [{ type: "text",
+   text }] }`. `v2.2.5` has one `Message` class; `v2.2.6` has one class per role
+   (`ai/src/schema/messages.ts:246-268`), so a copy of the assistant message with another role
+   would not do. Both pass every message through `Message.make` when the request is built
+   (`v2.2.5: ai/src/llm.ts:144`, `v2.2.6: ai/src/llm.ts:301`), which turns a plain object into
+   the right class, and nothing before that needs a class.
+4. Can the plugin recognise the notice? Both executables hold it word for word, with real line
+   breaks, as the continue notes are held; the plugin integration suite can pin it the same way.
+5. Which models? The fix sends the notice as a user message for every harness agent, whatever
+   its model: a user message works for every provider, so no list of models that refuse a
+   prefill is needed, and no paid request was made to find out about Claude Sonnet 5.5.

@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { INLINE_WAKE_TEXT, WAKE_TEXT } from "./answer-first.ts";
 import { INLINE_MARK, reviewerOffText } from "./inline.ts";
+import { STEP_LIMIT_NOTICE } from "./step-limit.ts";
 import { createPlugin } from "./plugin.ts";
 import { HELPER_OFF, LEAD_PROMPT, TESTER_ROUTING, embeddedFixture, fakeEnvironment } from "./testing.ts";
 import type { V2AgentEditor, V2AgentInfo, V2CommandDefinition, V2CommandEditor, V2Context, V2ContextEvent, V2Event, V2ModelMessage, V2ToolCall, V2ToolInfo } from "./types.ts";
@@ -537,6 +538,20 @@ describe("v2 answer first", () => {
     const scout = { sessionID: "c1", agent: "scout", messages: request() };
     await host.contextHooks[0]!(scout);
     expect(scout.messages).toHaveLength(4);
+    expect(host.synthetics).toEqual([]);
+  });
+
+  test("at the step limit, a harness agent's request ends with opencode's notice as a user message; another agent's is untouched", async () => {
+    const { host } = await start({});
+    const notice = (): V2ModelMessage => ({ role: "assistant", content: [{ type: "text", text: STEP_LIMIT_NOTICE }] });
+    for (const agent of ["scout", "tester", "lead"]) {
+      const event = { sessionID: `s-${agent}`, agent, messages: [...request().slice(0, 3), notice()] };
+      await host.contextHooks[0]!(event);
+      expect([agent, event.messages.at(-1)]).toEqual([agent, user(STEP_LIMIT_NOTICE)]);
+    }
+    const other = { sessionID: "s-build", agent: "build", messages: [...request().slice(0, 3), notice()] };
+    await host.contextHooks[0]!(other);
+    expect(other.messages.at(-1)).toEqual(notice());
     expect(host.synthetics).toEqual([]);
   });
 

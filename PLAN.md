@@ -868,20 +868,26 @@ refuse; opencode issues #56250 and #62641 are open. The designer had written no 
 `lead` then did the design itself instead of continuing the designer's session. Three fixes;
 tests come first in every task.
 
-- [~] Tiago: Research on 2.2.5 and 2.2.6: the step-limit notice's exact text and where it is
+- [x] Tiago: Research on 2.2.5 and 2.2.6: the step-limit notice's exact text and where it is
   added; that the plugin's `context` hook sees it last and that what the hook returns is
   sent; how the plugin makes a user message the request accepts (the message's own
   constructor); what OpenAI-compatible providers do with a last assistant message; which
   models of the profiles refuse prefill (Claude Opus 5.5 does; Claude Sonnet 5.5 to check with
-  one small request, with the owner's approval). Addendum in `docs/research/opencode-v2.md`
-- [~] Tiago: The step-limit notice reaches harness agents as a user message: in the `context`
+  one small request, with the owner's approval). Addendum in `docs/research/opencode-v2.md`.
+  Same notice and code in 2.2.6 and on the development branch; the hook edits the request in
+  place, and a plain `{ role: "user", content }` works in both versions (each passes messages
+  through `Message.make`); both executables hold the notice word for word. The fix applies to
+  every model, so no paid request was needed to find which ones refuse a prefill
+- [x] Tiago: The step-limit notice reaches harness agents as a user message: in the `context`
   hook, when a harness agent's request ends with an assistant message holding opencode's
   notice, word for word, the plugin puts a user message with the same text in its place;
   nothing else changes, and other agents' requests are left alone. Unit tests with the
   notice and near misses; the plugin integration suite pins the notice's text in the binary,
   as it does the continue notes; a stand-in run with a helper's steps lowered shows the last
   request ending with a user message and the helper reporting. To be removed once opencode
-  fixes the bug
+  fixes the bug. Done in `plugin/step-limit.ts`; the stand-in refuses a
+  request that ends with an assistant message, as Claude Opus 5.5 does, and the scout at a
+  limit of 2 reports; with the fix switched off the same test fails
 - [~] Tiago: The designer starts `spec.md` early: the goal, users and flow as soon as it knows
   them, then each screen, state and decision as it goes, so a cut-off still leaves a spec;
   within the helper budget

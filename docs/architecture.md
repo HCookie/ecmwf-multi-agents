@@ -47,6 +47,13 @@ Steps cap the number of model turns a helper may take. They act as a cost limit.
 also gets a model and an effort from the active profile (see Profiles), and users can change
 `model`, `effort` and `steps` per agent in the settings file.
 
+At the limit opencode gives the agent one more turn, without tools, to report. It adds its
+notice for that turn as an assistant message, which models without assistant prefill (Claude
+Opus 5.5 among them) refuse, so the helper would fail without a report. The plugin's `context`
+hook sends that notice to the harness's agents as a user message instead, recognising it word
+for word (`plugin/step-limit.ts`; `docs/research/opencode-v2.md`, Addendum: helpers that reach
+their step limit). This goes once opencode sends the notice as a user message itself.
+
 Every helper can be switched on or off per project (see Settings); `lead` is always on. The
 optional helpers are off until a settings file switches them on, and the others are on until
 one switches them off. A helper that is off does not exist in the session: `lead`'s

@@ -22,6 +22,7 @@ import { PLUGIN_DIR, pluginFiles } from "../tools/bundle-plugin.ts";
 import { V2_VERSION, emitV2 } from "../tools/emit-v2.ts";
 import type { OutputFile } from "../tools/types.ts";
 import { V2_CONTINUE_NOTES } from "./answer-first.ts";
+import { STEP_LIMIT_NOTICE } from "./step-limit.ts";
 import { HELPER_OFF, TESTER_ROUTING, resolvedFixture } from "./testing.ts";
 
 const enabled = process.env.ECMWF_MULTI_AGENTS_INTEGRATION === "1";
@@ -234,11 +235,13 @@ describe.skipIf(!enabled)(`plugin in opencode ${V2_VERSION}`, () => {
     if (box) rmSync(box.dir, { recursive: true, force: true });
   });
 
-  test("the executable still holds, word for word, the notes opencode adds to continue a cut-off reply", () => {
+  test("the executable still holds, word for word, the notes opencode adds to continue a cut-off reply and its step-limit notice", () => {
     // OPENCODE_V2_BIN may be a name on the PATH or a link, as node_modules/.bin/opencode is.
     const executable = realpathSync(Bun.which(v2Bin) ?? v2Bin);
     expect(statSync(executable).size).toBeGreaterThan(10 << 20);
     expect(textsIn(executable, V2_CONTINUE_NOTES)).toEqual([...V2_CONTINUE_NOTES]);
+    // And the step-limit notice, which the plugin sends as a user message (step-limit.ts).
+    expect(textsIn(executable, [STEP_LIMIT_NOTICE])).toEqual([STEP_LIMIT_NOTICE]);
   });
 
   test("settings apply after the agent files load, and lead becomes the default agent", async () => {

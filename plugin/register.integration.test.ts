@@ -34,6 +34,7 @@ import { V2_VERSION, emitV2 } from "../tools/emit-v2.ts";
 import { load } from "../tools/load.ts";
 import { resolveHarness } from "../tools/resolve.ts";
 import type { OutputFile } from "../tools/types.ts";
+import { STEP_LIMIT_NOTICE } from "./step-limit.ts";
 import type { EmbeddedHarness, PermissionRule } from "./types.ts";
 
 const enabled = process.env.ECMWF_MULTI_AGENTS_INTEGRATION === "1";
@@ -153,8 +154,8 @@ function installed(dir: string, name: string): string[] {
  * runs `touch <name>` in the shell once; every request is recorded.
  */
 function standIn() {
-  /** Each request: the agent, its user messages, the subagents its delegation tool lists, and every tool's description. */
-  const seen: Array<{ agent: string; users: string[]; subagents?: string; tools: Record<string, string> }> = [];
+  /** Each request: the agent, its user messages, its tool results, the subagents its delegation tool lists, and every tool's description. */
+  const seen: Array<{ agent: string; users: string[]; results: string[]; subagents?: string; tools: Record<string, string> }> = [];
   const textOf = (message: unknown): string => {
     const content = (message as { content?: unknown } | undefined)?.content;
     if (typeof content === "string") return content;
@@ -180,12 +181,34 @@ function standIn() {
       const messages = Array.isArray(body.messages) ? body.messages : [];
       const role = (message: unknown) => (message as { role?: string } | undefined)?.role;
       const system = messages.filter((message) => role(message) === "system" || role(message) === "developer").map(textOf).join("\n");
-      const agent = system.includes("You are the reviewer") ? "reviewer" : system.includes("You are lead") ? "lead" : "other";
+      const agent = system.includes("You are the reviewer") ? "reviewer" : system.includes("You are lead") ? "lead" : system.includes("You are a scout") ? "scout" : "other";
       const text = agent === "reviewer" ? "VERDICT: APPROVE\nCHECKED: the stand-in" : "lead done";
       const users = messages.filter((message) => role(message) === "user").map(textOf);
       const tools = Object.fromEntries((Array.isArray(body.tools) ? body.tools : []).map((tool) => [tool?.function?.name ?? "", tool?.function?.description ?? ""]));
       const subagents = tools.subagent;
-      seen.push({ agent, users, tools, ...(subagents === undefined ? {} : { subagents }) });
+      const results = messages.filter((message) => role(message) === "tool").map(textOf);
+      seen.push({ agent, users, results, tools, ...(subagents === undefined ? {} : { subagents }) });
+      const last = messages.at(-1) as { role?: string } | undefined;
+      // Like a model without assistant prefill (Claude Opus 5.5): a request must end with a user message.
+      if (role(last) === "assistant") {
+        return Response.json({ error: { type: "invalid_request_error", message: "This model does not support assistant message prefill. The conversation must end with a user message." } }, { status: 400 });
+      }
+      const call = (id: string, name: string, args: unknown) =>
+        new Response(`${chunk({ role: "assistant", content: null, tool_calls: [{ index: 0, id, type: "function", function: { name, arguments: JSON.stringify(args) } }] }, null)}${chunk({}, "tool_calls")}data: [DONE]\n\n`, {
+          headers: { "content-type": "text/event-stream" },
+        });
+      const toolResults = messages.filter((message) => role(message) === "tool").length;
+      // LIMIT: lead hands a scout a task it never finishes; the scout looks until its step limit, then reports.
+      if (body.stream && agent === "lead" && users.some((text) => text === "LIMIT") && toolResults === 0) {
+        return call("call_limit", "subagent", { agent: "scout", description: "look until the limit", prompt: "GOAL: look around, step by step." });
+      }
+      const atLimit = (users.at(-1) ?? "").includes(STEP_LIMIT_NOTICE.split("\n")[0]!);
+      if (body.stream && agent === "scout" && users.some((text) => text.includes("GOAL: look around")) && !atLimit) {
+        return call(`call_glob_${toolResults}`, "glob", { pattern: "*" });
+      }
+      if (body.stream && agent === "scout" && atLimit) {
+        return new Response(`${chunk({ role: "assistant", content: "ANSWER: stopped at the step limit." }, null)}${chunk({}, "stop")}data: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
+      }
       const touch = /TOUCH (\S+)/.exec(users.at(-1) ?? "");
       if (touch && body.stream && !messages.some((message) => role(message) === "tool")) {
         const call = { name: "shell", arguments: JSON.stringify({ command: `touch ${touch[1]}`, description: "touch" }) };
@@ -230,7 +253,7 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
   let stderr = "";
   let model: ReturnType<typeof standIn>;
   let embedded: EmbeddedHarness;
-  const projects = { line: "", files: "", both: "", changed: "", none: "", run: "", runFiles: "", packed: "", switched: "", switchedBoth: "", switchedRun: "", excludeRepo: "", excludeMain: "", excludeWorktree: "", excludeOutside: "" };
+  const projects = { line: "", files: "", both: "", changed: "", none: "", run: "", runFiles: "", packed: "", switched: "", switchedBoth: "", switchedRun: "", excludeRepo: "", excludeMain: "", excludeWorktree: "", excludeOutside: "", limitRun: "" };
 
   const call = async <T = unknown>(method: string, route: string, project: string, body?: unknown): Promise<{ status: number; data: T }> => {
     const target = new URL(route, url);
@@ -336,6 +359,9 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
     writeAll(path.join(projects.switchedRun, ".opencode"), [
       { path: `${NAME}.jsonc`, content: '{ "profile": "inherit", "agents": { "tester": { "enabled": true }, "scout": { "enabled": false }, "reviewer": { "enabled": false } } }\n' },
     ]);
+    // A scout with a step limit of 2, on the stand-in that refuses an assistant prefill.
+    projects.limitRun = gitProject(path.join(box, "limit-run"), { plugins: [line], model: "mock/m1", provider: { mock: provider } });
+    writeAll(path.join(projects.limitRun, ".opencode"), [{ path: `${NAME}.jsonc`, content: '{ "profile": "inherit", "agents": { "scout": { "steps": 2 } } }\n' }]);
     // A session start keeps the work folder out of git: a fresh repository, a git worktree whose
     // exclude file is the main repository's, and a folder outside git.
     projects.excludeRepo = gitProject(path.join(box, "exclude-repo"), { plugins: [line] });
@@ -603,6 +629,23 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
     await call("POST", `/api/session/${session.id}/synthetic`, projects.run, { text: report });
     const woken = await within(60_000, "lead to be woken by the report", async () => model.seen.find((item) => item.agent === "lead" && item.users.at(-1) === report));
     expect(woken.users.some((user) => user.startsWith("Review the target below"))).toBe(true);
+  }, 180_000);
+
+  test("a helper at its step limit reports, on a model that refuses an assistant prefill: the plugin sends opencode's notice as a user message", async () => {
+    const project = projects.limitRun;
+    await active(project);
+    await within(60_000, "the scout's step limit", async () => ((await agents(project)).find((agent) => agent.id === "scout")?.steps === 2 ? true : undefined));
+    const session = (await call<{ id: string }>("POST", "/api/session", project, { agent: "lead", location: { directory: project } })).data;
+    const asked = model.seen.length;
+    await call("POST", `/api/session/${session.id}/prompt`, project, { text: "LIMIT" });
+    // lead hands off; the scout looks until its limit, then reports; lead gets the report as the tool's result.
+    await within(60_000, "the scout's report in lead's next request", async () =>
+      model.seen.slice(asked).find((item) => item.agent === "lead" && item.results.some((text) => text.includes("ANSWER: stopped at the step limit."))),
+    );
+    const scout = model.seen.slice(asked).filter((item) => item.agent === "scout");
+    expect(scout.length).toBeGreaterThanOrEqual(2);
+    expect(scout.at(-1)!.users.at(-1)).toBe(STEP_LIMIT_NOTICE);
+    expect(scout.slice(0, -1).every((item) => !item.users.includes(STEP_LIMIT_NOTICE))).toBe(true);
   }, 180_000);
 
   test("a session start adds the work folder to git's exclude file: in a repository, in a worktree through the main repository, and not outside git", async () => {

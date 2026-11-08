@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+### Fixed
+
+- A helper that reaches its step limit on a model without assistant prefill, such as Claude
+  Opus 5.5, now reports what it has instead of failing with "This model does not support
+  assistant message prefill": the plugin sends opencode's step-limit notice as a user message.
+
 ## [0.9.0] - 2026-11-08
 
 ### Changed
