@@ -852,7 +852,8 @@ task, and the budgets go down to the measured sizes.
   2.2.5. The four cases pass on real models for $1.86: under `auto` the reviewer checked the
   change in `feature` and the plan and the change in `plan-execute`, and `onboard`'s exclude
   check passed with no exclude command from `lead` (`evals/results/lead-plugin-cuts.md`)
-- [ ] Tiago: Release when asked
+- [x] Tiago: Release when asked: 0.9.0, the GitHub release and
+  `@ecmwf.int/multi-agents@0.9.0` on npm with provenance
 
 Exit: `make check` and the integration suites pass on 2.2.5; `lead`'s prompt carries one
 policy's meaning and no exclude rule; the evals above pass.
