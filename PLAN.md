@@ -900,13 +900,15 @@ tests come first in every task.
   the gap stated; do not do its work), the builder's second failure still going to the user;
   `lead` 1,799 tokens, within its budget. opencode resumes a failed child too, with a fresh
   step count (`core/src/tool/plugin/subagent.ts:160-215`, `session/runner/llm.ts:65`)
-- [~] Tiago: Checks: unit and integration suites on 2.2.5 and on 2.2.6, which users already
+- [x] Tiago: Checks: unit and integration suites on 2.2.5 and on 2.2.6, which users already
   run; a new eval case, `designer-limit`, whose settings give the designer a low step limit:
   the designer reports at the limit, `spec.md` exists, and `lead` continues the designer's
   session rather than designing itself; it passes on the stand-in, then once on real models
   with the owner's approval of the quota. So far: 70 of 70 integration tests on 2.2.5; on 2.2.6, 68 of
   70, the two that fail also failing with 0.9.0 (see Follow-ups); `designer-limit` passes on
-  the stand-in, which refuses an assistant prefill
+  the stand-in, which refuses an assistant prefill, and once on real models for $1.98: the
+  designer reached its limit of 12 and reported with no request refused, and `lead` continued
+  the same session to finish (`evals/results/step-limit.md`)
 - [ ] Tiago: Release when asked
 
 Exit: `make check` and the integration suites pass on 2.2.5 and 2.2.6; a harness helper on
