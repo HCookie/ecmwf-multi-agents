@@ -79,6 +79,15 @@ describe("the optional helpers", () => {
     expect(agent("data-scientist").routing).toContain("not a project file");
   });
 
+  test("the designer starts spec.md early and keeps it current, so a cut-off still leaves a spec", () => {
+    const prompt = agent("designer").prompt;
+    const start = prompt.indexOf("Start `spec.md`");
+    expect(start).toBeGreaterThan(-1);
+    // Before the prototype and the screenshots, not after them.
+    expect(start).toBeLessThan(prompt.indexOf("Build the prototype"));
+    expect(prompt).toContain("so a cut-off still leaves a spec");
+  });
+
   test("the researcher matches its depth to the brief and keeps its report current, so a cut-off still leaves its findings", () => {
     const prompt = agent("researcher").prompt;
     expect(prompt).toContain("Match the depth to the brief");
