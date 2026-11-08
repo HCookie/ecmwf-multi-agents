@@ -844,10 +844,14 @@ task, and the budgets go down to the measured sizes.
   git (a repository, a deep folder, a worktree, a submodule, a repository without `info/`, a
   file it cannot write, outside git) and in opencode 2.2.5 (a repository, a worktree, outside
   git); the rule also left `/onboard`, `/plan` and the plan skill. `lead` 1845 to 1795 tokens
-- [~] Tiago: Budgets lowered to the measured sizes; integration suites on 2.2.5, with a
+- [x] Tiago: Budgets lowered to the measured sizes; integration suites on 2.2.5, with a
   session start in a repository, a worktree and a folder outside git; real-model runs with
   the owner's approval of the quota: `feature` and `plan-execute` (review policy `auto`),
-  `onboard` (its `workDirExcluded` check) and `review-background`
+  `onboard` (its `workDirExcluded` check) and `review-background`. Budgets `lead` 1900 to
+  1800 and `lead-all` 2250 to 2150 (measured 1795 and 2142); 68 of 68 integration tests on
+  2.2.5. The four cases pass on real models for $1.86: under `auto` the reviewer checked the
+  change in `feature` and the plan and the change in `plan-execute`, and `onboard`'s exclude
+  check passed with no exclude command from `lead` (`evals/results/lead-plugin-cuts.md`)
 - [ ] Tiago: Release when asked
 
 Exit: `make check` and the integration suites pass on 2.2.5; `lead`'s prompt carries one
