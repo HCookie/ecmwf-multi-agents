@@ -452,10 +452,12 @@ All harness files in a project live under `.ecmwf-multi-agents/` at the top of t
 | `design/<slug>/` | Specs, prototypes and screenshots from `designer` |
 | `data/<slug>/` | Scripts, results, figures and the data sources from `data-scientist` |
 
-Before writing the first file, `lead` makes sure `.ecmwf-multi-agents/` is listed in the file
-that `git rev-parse --git-path info/exclude` names. The folder then never shows up in
-`git status` or commits. Because search tools skip ignored files, prompts refer to work files
-by exact path.
+At each start of a user's session in a git repository, the plugin adds `.ecmwf-multi-agents/`
+to the file that `git rev-parse --git-path info/exclude` names, once, finding it as git does
+in a repository, a worktree or a submodule; it is the plugin's only write into a project. The
+folder then never shows up in `git status` or commits, and the file is local to the clone.
+A failure to write it is reported, and `doctor` says whether the line is there. Because search
+tools skip ignored files, prompts refer to work files by exact path.
 
 ## Onboarding summary
 
@@ -580,7 +582,8 @@ The plugin is the folder `plugins/ecmwf-multi-agents/` of `dist/opencode-v2/`, w
 entries bundled from `plugin/`:
 
 ```text
-plugins/ecmwf-multi-agents/index.js   server entry: registration, settings, helper tools, RPC
+plugins/ecmwf-multi-agents/index.js   server entry: registration, settings, helper tools, RPC,
+                                      the work folder in git's exclude file
 plugins/ecmwf-multi-agents/tui.js     TUI entry: shows the plugin's problems as toasts
 ```
 
@@ -652,7 +655,7 @@ The server entry registers an RPC with the id `ecmwf-multi-agents`, reachable at
 
 | Method or event | Answer |
 |---|---|
-| `doctor` | The harness version, the default agent, whether `lead` is loaded and whether it is the harness's own (`leadDefinition`, with the fields that differ in `leadChanged`), the `lead.md` files and opencode configs with a `lead` entry that could change it, `lead`'s `Review policy:` line, helper limit instruction and model, which helpers are on and which off, the effective settings and the file each comes from, the problems found, and the state of the plugins other than opencode's own |
+| `doctor` | The harness version, the default agent, whether `lead` is loaded and whether it is the harness's own (`leadDefinition`, with the fields that differ in `leadChanged`), the `lead.md` files and opencode configs with a `lead` entry that could change it, `lead`'s `Review policy:` line, helper limit instruction and model, which helpers are on and which off, whether git's exclude file lists the work folder, the effective settings and the file each comes from, the problems found, and the state of the plugins other than opencode's own |
 | `problems` | The problems found since the plugin loaded, each with `notify` when it deserves a toast |
 | event `problem` | Published for each new problem |
 
@@ -762,8 +765,8 @@ Prompt budgets, checked by the generator at about four characters per token:
 
 | Kind | Budget |
 |---|---|
-| `lead` prompt | 1,900 tokens |
-| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | 2,250 tokens (`lead-all`) |
+| `lead` prompt | 1,800 tokens |
+| The largest `lead` prompt the plugin can make: every routing line and the `helperOff` line added | 2,150 tokens (`lead-all`) |
 | Helper prompt | 750 tokens |
 | Routing line of an optional helper | 100 tokens |
 | Command template | 500 tokens |

@@ -73,6 +73,7 @@ describe("doctor", () => {
       helperSwitches: [],
       helpersMissing: [],
       helpersStray: [],
+      workDirExcluded: null,
       problems: [{ problem: "x: something", notify: true }],
       plugins: [
         { id: "opencode.broken", status: "failed", error: "boom" },
@@ -80,6 +81,15 @@ describe("doctor", () => {
         { id: "ecmwf-multi-agents", status: "failed", error: "Duplicate plugin ID: ecmwf-multi-agents" },
       ],
     });
+  });
+
+  test("says whether git's exclude file lists the work folder, and null outside git", async () => {
+    const lead = loadedLead({});
+    const report = async (files: Record<string, string>) => (await doctorReport(input(files, [lead]))).workDirExcluded;
+    expect(await report({ "/repo/.git/info/exclude": "# x\n.ecmwf-multi-agents/\n" })).toBe(true);
+    expect(await report({ "/repo/.git/info/exclude": "# x\n" })).toBe(false);
+    expect(await report({ "/repo/.git/HEAD": "ref: refs/heads/main\n" })).toBe(false);
+    expect(await report({})).toBeNull();
   });
 
   test("waits for the settings to reach the agents before it reads them", async () => {

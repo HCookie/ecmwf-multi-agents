@@ -230,7 +230,7 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
   let stderr = "";
   let model: ReturnType<typeof standIn>;
   let embedded: EmbeddedHarness;
-  const projects = { line: "", files: "", both: "", changed: "", none: "", run: "", runFiles: "", packed: "", switched: "", switchedBoth: "", switchedRun: "" };
+  const projects = { line: "", files: "", both: "", changed: "", none: "", run: "", runFiles: "", packed: "", switched: "", switchedBoth: "", switchedRun: "", excludeRepo: "", excludeMain: "", excludeWorktree: "", excludeOutside: "" };
 
   const call = async <T = unknown>(method: string, route: string, project: string, body?: unknown): Promise<{ status: number; data: T }> => {
     const target = new URL(route, url);
@@ -336,6 +336,19 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
     writeAll(path.join(projects.switchedRun, ".opencode"), [
       { path: `${NAME}.jsonc`, content: '{ "profile": "inherit", "agents": { "tester": { "enabled": true }, "scout": { "enabled": false }, "reviewer": { "enabled": false } } }\n' },
     ]);
+    // A session start keeps the work folder out of git: a fresh repository, a git worktree whose
+    // exclude file is the main repository's, and a folder outside git.
+    projects.excludeRepo = gitProject(path.join(box, "exclude-repo"), { plugins: [line] });
+    projects.excludeMain = gitProject(path.join(box, "exclude-main"));
+    const commit = Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"], { cwd: projects.excludeMain });
+    if (commit.exitCode !== 0) throw new Error(`git commit failed: ${commit.stderr.toString()}`);
+    projects.excludeWorktree = path.join(box, "exclude-worktree");
+    const worktree = Bun.spawnSync(["git", "worktree", "add", "-q", projects.excludeWorktree, "-b", "wt"], { cwd: projects.excludeMain });
+    if (worktree.exitCode !== 0) throw new Error(`git worktree add failed: ${worktree.stderr.toString()}`);
+    writeFileSync(path.join(projects.excludeWorktree, "opencode.json"), `${JSON.stringify({ plugins: [line] }, null, 2)}\n`);
+    projects.excludeOutside = path.join(box, "exclude-outside");
+    mkdirSync(projects.excludeOutside);
+    writeFileSync(path.join(projects.excludeOutside, "opencode.json"), `${JSON.stringify({ plugins: [line] }, null, 2)}\n`);
     const globalConfig = path.join(box, "home", ".config", "opencode");
     mkdirSync(globalConfig, { recursive: true });
     writeFileSync(path.join(globalConfig, "opencode.json"), `${JSON.stringify({ permissions: GLOBAL_PERMISSIONS }, null, 2)}\n`);
@@ -590,6 +603,34 @@ describe.skipIf(!v2Available)(`a project's plugins line in opencode ${V2_VERSION
     await call("POST", `/api/session/${session.id}/synthetic`, projects.run, { text: report });
     const woken = await within(60_000, "lead to be woken by the report", async () => model.seen.find((item) => item.agent === "lead" && item.users.at(-1) === report));
     expect(woken.users.some((user) => user.startsWith("Review the target below"))).toBe(true);
+  }, 180_000);
+
+  test("a session start adds the work folder to git's exclude file: in a repository, in a worktree through the main repository, and not outside git", async () => {
+    const excludeOf = (dir: string) => readFileSync(path.join(dir, ".git", "info", "exclude"), "utf8");
+    const listed = (text: string) => text.split("\n").filter((entry) => entry === `.${NAME}/`).length;
+    for (const [project, gitDir] of [
+      [projects.excludeRepo, projects.excludeRepo],
+      [projects.excludeWorktree, projects.excludeMain],
+    ] as const) {
+      await active(project);
+      expect(listed(excludeOf(gitDir))).toBe(0);
+      for (let i = 0; i < 2; i++) await call("POST", "/api/session", project, { agent: "lead", location: { directory: project } });
+      await within(30_000, `the exclude line for ${path.basename(project)}`, async () => (listed(excludeOf(gitDir)) > 0 ? true : undefined));
+      await Bun.sleep(1_000);
+      // Once, however many sessions start; git now ignores the work files.
+      expect(listed(excludeOf(gitDir))).toBe(1);
+      const ignored = Bun.spawnSync(["git", "check-ignore", "-q", `.${NAME}/notes/a.md`], { cwd: project });
+      expect(ignored.exitCode).toBe(0);
+      const doctor = await call<{ output?: Record<string, unknown> }>("POST", `/api/rpc/${NAME}/doctor`, project, { input: {} });
+      expect(doctor.data.output).toMatchObject({ workDirExcluded: true, problems: [] });
+    }
+    const outside = projects.excludeOutside;
+    await active(outside);
+    await call("POST", "/api/session", outside, { agent: "lead", location: { directory: outside } });
+    await Bun.sleep(2_000);
+    expect(existsSync(path.join(outside, ".git"))).toBe(false);
+    const doctor = await call<{ output?: Record<string, unknown> }>("POST", `/api/rpc/${NAME}/doctor`, outside, { input: {} });
+    expect(doctor.data.output).toMatchObject({ workDirExcluded: null, problems: [] });
   }, 180_000);
 
   test("settings switch helpers on and off, whether the helpers come from the line or from files", async () => {

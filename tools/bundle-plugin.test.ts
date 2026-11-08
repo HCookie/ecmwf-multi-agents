@@ -136,7 +136,8 @@ describe("bundlePlugin", () => {
 describe("embedHarness", () => {
   test("keeps what the plugin needs: profiles, agents with their mode, and the helpers' commands", () => {
     const data = embedHarness(resolvedFixture());
-    expect(Object.keys(data)).toEqual(["name", "version", "defaultAgent", "defaultProfile", "profiles", "agents", "commands", "skills", "helperOff", "reviewPolicies"]);
+    expect(Object.keys(data)).toEqual(["name", "version", "defaultAgent", "defaultProfile", "workDir", "profiles", "agents", "commands", "skills", "helperOff", "reviewPolicies"]);
+    expect(data.workDir).toBe(".ecmwf-multi-agents");
     expect(data.reviewPolicies).toEqual(REVIEW_MEANINGS);
     expect(data.profiles.map((profile) => profile.id)).toEqual(["anthropic", "copilot", "default", "inherit"]);
     expect(data.profiles.find((profile) => profile.id === "default")!.agents).toEqual({

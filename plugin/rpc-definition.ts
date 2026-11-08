@@ -56,6 +56,8 @@ export interface DoctorView {
   helpersMissing: string[];
   /** Default helpers that are off but that opencode still loaded. */
   helpersStray: string[];
+  /** Whether git's exclude file lists the work folder; null outside git. */
+  workDirExcluded: boolean | null;
   problems: ProblemView[];
   plugins: Array<{ id: string | null; status: string | null; error?: string }>;
 }

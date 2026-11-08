@@ -36,6 +36,13 @@ export interface TrackedSession {
   updatedAt: number;
 }
 
+/** An event with the fields opencode sends under `data` lifted to the top; undefined without a type. */
+export function eventFields(envelope: V2Event | undefined): V2Event | undefined {
+  if (typeof envelope?.type !== "string") return undefined;
+  const data = envelope.data;
+  return { ...envelope, ...(data !== null && typeof data === "object" ? (data as V2Event) : {}), type: envelope.type };
+}
+
 /** Sessions as the event stream describes them. */
 export class SessionTracker {
   private readonly sessions = new Map<string, TrackedSession>();
@@ -46,9 +53,8 @@ export class SessionTracker {
    * types and fields are those of schema/src/session-event.ts at v2.0.16 (research, section 11).
    */
   observe(envelope: V2Event | undefined, now: number = Date.now()): void {
-    if (typeof envelope?.type !== "string") return;
-    const data = envelope.data;
-    const event: V2Event = { ...envelope, ...(data !== null && typeof data === "object" ? (data as V2Event) : {}), type: envelope.type };
+    const event = eventFields(envelope);
+    if (event === undefined) return;
     const id = event.sessionID;
     if (typeof id !== "string" || id === "") return;
     switch (event.type) {

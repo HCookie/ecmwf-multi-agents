@@ -834,13 +834,16 @@ task, and the budgets go down to the measured sizes.
   `doctor` and `install.sh doctor` compare and show the whole line. Done with the meaning on
   the line after the policy, so `Review policy: <policy>` and `doctor`'s output stay as they
   were; a next line of the user's own is kept. `lead` 1893 to 1845 tokens
-- [~] Tiago: The work folder in git's exclude file, by the plugin: at each session start in a
+- [x] Tiago: The work folder in git's exclude file, by the plugin: at each session start in a
   git repository it appends `.ecmwf-multi-agents/` to the exclude file once (the owner chose
   session start, which covers what helpers write through the shell, at the cost of one line
   in `.git` of every repository the harness runs in). Nothing outside git or when the line is
   there; a failure is reported, never thrown. `lead`'s rule goes, `doctor` warns when the
   line is missing, and `docs/architecture.md` (The plugin, Work files) records the plugin's
-  first write into a project
+  first write into a project. Done in `plugin/git-exclude.ts`, tested against real
+  git (a repository, a deep folder, a worktree, a submodule, a repository without `info/`, a
+  file it cannot write, outside git) and in opencode 2.2.5 (a repository, a worktree, outside
+  git); the rule also left `/onboard`, `/plan` and the plan skill. `lead` 1845 to 1795 tokens
 - [~] Tiago: Budgets lowered to the measured sizes; integration suites on 2.2.5, with a
   session start in a repository, a worktree and a folder outside git; real-model runs with
   the owner's approval of the quota: `feature` and `plan-execute` (review policy `auto`),

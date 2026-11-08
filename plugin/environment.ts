@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 European Centre for Medium-Range Weather Forecasts (ECMWF)
 // SPDX-License-Identifier: Apache-2.0
 
-import { readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import type { Environment } from "./types.ts";
 
 /** The real process: its variables, home directory and file system. */
@@ -18,6 +19,13 @@ export function processEnvironment(): Environment {
         if (code === "ENOENT" || code === "ENOTDIR") return undefined;
         throw error;
       }
+    },
+    isDirectory(file) {
+      return statSync(file, { throwIfNoEntry: false })?.isDirectory() ?? false;
+    },
+    appendFile(file, text) {
+      mkdirSync(path.dirname(file), { recursive: true });
+      appendFileSync(file, text);
     },
   };
 }

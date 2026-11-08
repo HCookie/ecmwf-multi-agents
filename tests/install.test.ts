@@ -54,6 +54,7 @@ const GOOD_DOCTOR = {
     helperSwitches: [],
     helpersMissing: [],
     helpersStray: [],
+    workDirExcluded: true,
     problems: [],
     plugins: [{ id: NAME, status: "active" }],
   },
@@ -594,6 +595,7 @@ describe("doctor", () => {
     expect(out).toContain("OK    max_helper_slots 4; lead's instruction: Run at most 4 helpers at once.");
     expect(out).toContain("OK    helpers on: scout, builder, reviewer; off: researcher, tester, designer, data-scientist");
     expect(out).not.toContain("switched in the settings");
+    expect(out).toContain("OK    git's exclude file lists the work folder .ecmwf-multi-agents/");
     expect(out).toContain("OK    lead is the default agent");
   });
 
@@ -777,6 +779,17 @@ describe("doctor asks opencode through the plugin's RPC", () => {
     expect(out).toContain("WARN  switched off, but opencode still has: builder; this opencode may not let the plugin remove agents");
     answer(box, { output: { ...GOOD_DOCTOR.output, helpersOn: [], helpersOff: ["scout", "builder", "reviewer", "researcher", "tester", "designer", "data-scientist"] } });
     expect(run(box, ["doctor"]).out).toContain("OK    helpers on: none; off: scout, builder, reviewer, researcher, tester, designer, data-scientist");
+  });
+
+  test("the work folder missing from git's exclude file is a warning; outside git nothing is said", () => {
+    const box = makeBox();
+    run(box, []);
+    answer(box, { output: { ...GOOD_DOCTOR.output, workDirExcluded: false } });
+    expect(run(box, ["doctor"]).out).toContain(
+      "WARN  git's exclude file does not list the work folder .ecmwf-multi-agents/ yet; the plugin adds it when a session starts here",
+    );
+    answer(box, { output: { ...GOOD_DOCTOR.output, workDirExcluded: null } });
+    expect(run(box, ["doctor"]).out).not.toContain("exclude file");
   });
 
   test("a global install masks a project's plugins line: a warning", () => {

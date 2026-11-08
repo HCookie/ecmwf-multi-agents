@@ -16,6 +16,7 @@
 
 import path from "node:path";
 import { effectiveReview, helperSlotsLine, helpersSwitched, modelRef, planAgents, rewriteHelperSlotsLine, rewriteReviewLine } from "./apply.ts";
+import { gitExcludeFile, workDirListed } from "./git-exclude.ts";
 import { enabledHelpers, helpersOf, rewriteHelperList } from "./helper-list.ts";
 import { parseJsonc } from "./jsonc.ts";
 import { rpcDefinition, type DoctorView, type ProblemView } from "./rpc-definition.ts";
@@ -135,6 +136,18 @@ export function agentConfigFiles(id: string, environment: Environment, directory
   return found;
 }
 
+/** Whether git's exclude file lists the work folder, read only; null outside git or without a folder. */
+function workDirExcluded(harness: EmbeddedHarness, environment: Environment, directory: string | undefined): boolean | null {
+  if (directory === undefined) return null;
+  try {
+    const file = gitExcludeFile(directory, environment);
+    return file === undefined ? null : workDirListed(readable(environment, file) ?? "", harness.workDir);
+  } catch {
+    // A `.git` it cannot read: doctor cannot tell.
+    return null;
+  }
+}
+
 function sameModel(a: V2ModelRef | undefined, b: V2ModelRef | undefined): boolean {
   return a?.providerID === b?.providerID && a?.id === b?.id;
 }
@@ -234,6 +247,7 @@ export async function doctorReport(input: DoctorInput): Promise<DoctorView> {
     helpersMissing: helpers.filter((helper) => on.has(helper.id) && !loadedIds.has(helper.id)).map((helper) => helper.id),
     // An optional helper that is off is never registered, so an agent with its name is the user's.
     helpersStray: helpers.filter((helper) => helper.optional !== true && !on.has(helper.id) && loadedIds.has(helper.id)).map((helper) => helper.id),
+    workDirExcluded: workDirExcluded(harness, input.environment, input.directory ?? input.projectRoot),
     problems: input.problems.list(),
     // opencode's own plugins only when they failed.
     plugins: (Array.isArray(plugins) ? plugins : [])

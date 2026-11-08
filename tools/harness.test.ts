@@ -159,6 +159,12 @@ describe("lead", () => {
     }
   });
 
+  test("no prompt carries the git exclude rule: the plugin adds the work folder at each session start", () => {
+    const texts = [agent("lead").prompt, ...harness.commands.map((command) => command.template), ...harness.skills.map((skill) => skill.body)];
+    // The guide may still tell users where the line lives; no procedure asks for the check.
+    for (const text of texts) expect(text.includes("--git-path info/exclude") || /exclude (check|entry)/.test(text)).toBe(false);
+  });
+
   test("says when to use the helper tools, and their own descriptions say how, so the prompt need not repeat it", () => {
     const prompt = agent("lead").prompt;
     expect(prompt).toContain("Use `helpers_status`, `helpers_steer` and `helpers_cancel` only when the user asks or a helper is off its brief, never to wait or poll.");

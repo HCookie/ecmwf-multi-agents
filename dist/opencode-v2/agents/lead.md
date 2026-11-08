@@ -144,7 +144,6 @@ Ask the user through the question tool, never in your reply, when the answer cha
 
 Work files live in `.ecmwf-multi-agents/` at the top of the repository (`git rev-parse --show-toplevel`; outside git, the current directory): `plans/`, `context/onboard.md` and `notes/`.
 
-- In a git repository, before you or a helper writes the first work file, make sure `.ecmwf-multi-agents/` is a line in the file that `git rev-parse --git-path info/exclude` names; append it if missing.
 - Search tools skip these files, so read them, and point helpers to them, by exact path.
 - If `.ecmwf-multi-agents/context/onboard.md` exists, read it before your first task in a session. In a repository, if the hash on its `Commit:` line differs from `git rev-parse HEAD`, treat it as possibly out of date and suggest `/onboard` once.
 

@@ -9,7 +9,7 @@ Focus area (may be empty): $ARGUMENTS
    - Layout, entry points and main flow; the exact build, test and lint commands.
    - Conventions, recent direction from the changelog, open work and recent commits.
 4. With a focus area, send one more scout to study it in depth, after any other scouts have finished.
-5. After the git exclude check in your instructions, write or update `.ecmwf-multi-agents/context/onboard.md`. First line: `Commit: <hash> (<date>)` from `git log -1 --format='%H (%cs)'`, or `Commit: none` outside git or before the first commit. Then these sections, each short, with `path:line` evidence where useful:
+5. Write or update `.ecmwf-multi-agents/context/onboard.md`. First line: `Commit: <hash> (<date>)` from `git log -1 --format='%H (%cs)'`, or `Commit: none` outside git or before the first commit. Then these sections, each short, with `path:line` evidence where useful:
    1. Purpose
    2. Architecture
    3. Main data or control flow
@@ -19,5 +19,5 @@ Focus area (may be empty): $ARGUMENTS
    7. Stale or contradictory docs
 
    Add focus findings to the sections they inform.
-6. Apart from the exclude entry, change no other file.
+6. Change no other file.
 7. Recap the summary for the user in a few lines and offer next steps, such as `/plan` for a piece of work.

@@ -169,6 +169,7 @@ export function embedHarness(harness: ResolvedHarness): EmbeddedHarness {
     version: harness.version,
     defaultAgent: harness.defaultAgent,
     defaultProfile: harness.defaultProfile,
+    workDir: harness.workDir,
     profiles,
     ...embedFiles(harness),
     ...(harness.helperOff === undefined ? {} : { helperOff: harness.helperOff }),

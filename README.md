@@ -94,7 +94,8 @@ A command defined in a project's `.opencode/commands/` takes precedence over the
 [Switch it on per project](#switch-it-on-per-project) for this and the other exception).
 
 Plans, notes and summaries live in `.ecmwf-multi-agents/` inside your project. That folder is
-kept out of git through `.git/info/exclude`, so nothing extra appears in your commits.
+kept out of git through `.git/info/exclude`, where the plugin adds it when a session starts, so
+nothing extra appears in your commits.
 
 ## Helpers in the background
 

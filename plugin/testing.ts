@@ -247,5 +247,10 @@ export function fakeEnvironment(files: Record<string, string>, env: Record<strin
     env,
     home,
     readFile: (file) => files[file],
+    // A folder is any path that holds a file; writes go into the same record.
+    isDirectory: (dir) => Object.keys(files).some((file) => file.startsWith(`${dir}/`)),
+    appendFile: (file, text) => {
+      files[file] = (files[file] ?? "") + text;
+    },
   };
 }

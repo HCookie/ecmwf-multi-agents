@@ -231,6 +231,37 @@ describe("v2 setup", () => {
     expect(write).toEqual([]);
   });
 
+  test("a session start adds the work folder to git's exclude file once; a helper's session does not", async () => {
+    const files: Record<string, string> = { "/repo/.git/HEAD": "ref: refs/heads/main\n", "/repo/.git/info/exclude": "# git ls-files --others --exclude-from=.git/info/exclude\n" };
+    const { host, write } = await start(files);
+    host.emit("session.created", { sessionID: "child", parentID: "root", location: { directory: "/repo/sub" } });
+    await settle();
+    expect(files["/repo/.git/info/exclude"]).toBe("# git ls-files --others --exclude-from=.git/info/exclude\n");
+    host.emit("session.created", { sessionID: "root", location: { directory: "/repo/sub" } });
+    host.emit("session.created", { sessionID: "again", location: { directory: "/repo/sub" } });
+    await settle();
+    expect(files["/repo/.git/info/exclude"]).toBe("# git ls-files --others --exclude-from=.git/info/exclude\n.ecmwf-multi-agents/\n");
+    expect(write).toEqual([]);
+  });
+
+  test("a work folder the plugin cannot exclude is reported once, and nothing throws", async () => {
+    const files: Record<string, string> = { "/repo/.git/HEAD": "ref: refs/heads/main\n" };
+    const write: string[] = [];
+    const host = new FakeHost();
+    const environment = () => ({
+      ...fakeEnvironment(files),
+      appendFile: () => {
+        throw new Error("EACCES: permission denied");
+      },
+    });
+    await createPlugin(harness, { environment, write: (line) => write.push(line), fallbackMs: 60_000 }).setup(host.ctx);
+    for (const sessionID of ["one", "two"]) host.emit("session.created", { sessionID, location: { directory: "/repo" } });
+    await settle();
+    expect(write).toEqual([
+      "ecmwf-multi-agents: could not add .ecmwf-multi-agents/ to /repo/.git/info/exclude, so git may list the harness's work files: EACCES: permission denied",
+    ]);
+  });
+
   test("a later activation that reloads the loader is followed by a fresh registration at the end", async () => {
     const { host } = await start({ [GLOBAL]: '{ "profile": "inherit" }' });
     host.loader();

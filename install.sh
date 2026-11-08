@@ -1419,6 +1419,10 @@ doctor_live() {
 	[ -z "$live_missing" ] || note "switched on, but opencode did not load: $live_missing; an opencode config or another plugin may remove it"
 	live_stray=$(json_list helpersStray)
 	[ -z "$live_stray" ] || note "switched off, but opencode still has: $live_stray; this opencode may not let the plugin remove agents"
+	case $(json_value workDirExcluded) in
+	true) ok "git's exclude file lists the work folder .$NAME/" ;;
+	false) note "git's exclude file does not list the work folder .$NAME/ yet; the plugin adds it when a session starts here" ;;
+	esac
 	if [ "$live_default" = lead ]; then
 		ok "lead is the default agent"
 	else

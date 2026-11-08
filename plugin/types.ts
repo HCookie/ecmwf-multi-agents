@@ -14,6 +14,8 @@ export interface EmbeddedHarness {
   /** The agent that holds the conversation, owns the review line and becomes the default agent. */
   defaultAgent: string;
   defaultProfile: string;
+  /** The work folder at the repository top, kept out of git by the plugin. */
+  workDir: string;
   profiles: EmbeddedProfile[];
   agents: EmbeddedAgent[];
   commands: EmbeddedCommand[];
@@ -123,6 +125,10 @@ export interface Environment {
   home: string;
   /** File content, or undefined when the file does not exist. Other failures throw. */
   readFile: (file: string) => string | undefined;
+  /** True when the path is a folder; false when it is missing or a file. */
+  isDirectory: (file: string) => boolean;
+  /** Add text at the end of a file, creating the file and its folder when missing. Failures throw. */
+  appendFile: (file: string, text: string) => void;
 }
 
 /** One JSON Schema property of a tool argument. */

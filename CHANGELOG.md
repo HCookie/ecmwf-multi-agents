@@ -11,6 +11,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+### Changed
+
+- The plugin, not `lead`, keeps the work folder `.ecmwf-multi-agents/` out of git: when a
+  session starts in a git repository, it adds the folder to `.git/info/exclude` once, also in a
+  worktree or a submodule. `doctor` shows whether the line is there.
+- `lead`'s instructions say only what the review policy in force means, not all four policies.
+  Together with the change above, they are about 100 tokens shorter.
+
 ## [0.8.0] - 2026-11-07
 
 ### Added

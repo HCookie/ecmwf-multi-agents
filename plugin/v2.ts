@@ -45,6 +45,7 @@ import { fileURLToPath } from "node:url";
 import { heldReportsV2, WAKE_TEXT } from "./answer-first.ts";
 import { applyToV2Agents, modelRef, planAgents, type AgentPlan } from "./apply.ts";
 import { processEnvironment } from "./environment.ts";
+import { excludeWorkDir } from "./git-exclude.ts";
 import { enabledHelpers } from "./helper-list.ts";
 import { Activity, helperIds, toolCallBlock } from "./helpers.ts";
 import { Inline } from "./inline.ts";
@@ -53,7 +54,7 @@ import { v2Reporter, type Reporter } from "./report.ts";
 import { ProblemLog, registerRpc } from "./rpc.ts";
 import { RuleOrder } from "./rule-order.ts";
 import { loadSettings, mergeSettings, type LoadedSettings } from "./settings.ts";
-import { SessionTracker, v2Tools } from "./tools-v2.ts";
+import { eventFields, SessionTracker, v2Tools } from "./tools-v2.ts";
 import type { EmbeddedHarness, Environment, Settings, V2AgentEditor, V2Cleanup, V2CommandEditor, V2Context, V2Event, V2Registration } from "./types.ts";
 
 /** Registers anyway when no `plugin.updated` arrives, in case the first one came before the subscription. */
@@ -123,6 +124,26 @@ class LateTransform<E> {
   stop(): void {
     this.stopped = true;
   }
+}
+
+/**
+ * At each start of a user's session (a helper's has a parent), add the work folder to git's
+ * exclude file of the session's repository, once. A failure is reported once per file.
+ */
+function keepWorkDirOutOfGit(ctx: V2Context, harness: EmbeddedHarness, environment: Environment | undefined, reporter: Reporter): (event: V2Event) => void {
+  const reported = new Set<string>();
+  return (envelope) => {
+    const event = eventFields(envelope);
+    if (event?.type !== "session.created" || environment === undefined) return;
+    if (typeof event.parentID === "string" && event.parentID !== "") return;
+    const location = event.location as { directory?: unknown } | undefined;
+    const directory = typeof location?.directory === "string" ? location.directory : ctx.location?.directory;
+    if (typeof directory !== "string" || directory === "") return;
+    const result = excludeWorkDir(directory, harness.workDir, environment);
+    if (result.state !== "failed" || reported.has(`${result.file}\n${result.error}`)) return;
+    reported.add(`${result.file}\n${result.error}`);
+    reporter.report([{ message: `${harness.name}: could not add ${harness.workDir}/ to ${result.file}, so git may list the harness's work files: ${result.error}`, notify: true }]);
+  };
 }
 
 function watchEvents(ctx: V2Context, onActivation: () => void, onEvent: (event: V2Event) => void, reporter: Reporter, fallbackMs: number): () => void {
@@ -317,7 +338,12 @@ export function createSetup(harness: EmbeddedHarness, options: V2Options = {}) {
         void agentTransform.register();
         void lateCommands?.register();
       };
-      const stopWatching = watchEvents(ctx, onActivation, (event) => tracker.observe(event), reporter, options.fallbackMs ?? FALLBACK_MS);
+      const keepOut = keepWorkDirOutOfGit(ctx, harness, environment, reporter);
+      const onEvent = (event: V2Event) => {
+        tracker.observe(event);
+        keepOut(event);
+      };
+      const stopWatching = watchEvents(ctx, onActivation, onEvent, reporter, options.fallbackMs ?? FALLBACK_MS);
       return async () => {
         stopWatching();
         agentTransform.stop();
