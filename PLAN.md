@@ -868,13 +868,13 @@ refuse; opencode issues #56250 and #62641 are open. The designer had written no 
 `lead` then did the design itself instead of continuing the designer's session. Three fixes;
 tests come first in every task.
 
-- [ ] Tiago: Research on 2.2.5 and 2.2.6: the step-limit notice's exact text and where it is
+- [~] Tiago: Research on 2.2.5 and 2.2.6: the step-limit notice's exact text and where it is
   added; that the plugin's `context` hook sees it last and that what the hook returns is
   sent; how the plugin makes a user message the request accepts (the message's own
   constructor); what OpenAI-compatible providers do with a last assistant message; which
   models of the profiles refuse prefill (Claude Opus 5.5 does; Claude Sonnet 5.5 to check with
   one small request, with the owner's approval). Addendum in `docs/research/opencode-v2.md`
-- [ ] Tiago: The step-limit notice reaches harness agents as a user message: in the `context`
+- [~] Tiago: The step-limit notice reaches harness agents as a user message: in the `context`
   hook, when a harness agent's request ends with an assistant message holding opencode's
   notice, word for word, the plugin puts a user message with the same text in its place;
   nothing else changes, and other agents' requests are left alone. Unit tests with the
@@ -882,15 +882,15 @@ tests come first in every task.
   as it does the continue notes; a stand-in run with a helper's steps lowered shows the last
   request ending with a user message and the helper reporting. To be removed once opencode
   fixes the bug
-- [ ] Tiago: The designer starts `spec.md` early: the goal, users and flow as soon as it knows
+- [~] Tiago: The designer starts `spec.md` early: the goal, users and flow as soon as it knows
   them, then each screen, state and decision as it goes, so a cut-off still leaves a spec;
   within the helper budget
-- [ ] Tiago: `lead` continues a helper that failed or stopped at its step limit: it resumes
+- [~] Tiago: `lead` continues a helper that failed or stopped at its step limit: it resumes
   that helper's session (the session ID its result gives) with a short brief to finish and
   report, rather than doing the work itself; this widens the retry rules that now cover only
   the builder and the scout. `lead` is at 1,795 of 1,800 tokens: make room, or raise the budget
   to the measured size with the reason
-- [ ] Tiago: Checks: unit and integration suites on 2.2.5 and on 2.2.6, which users already
+- [~] Tiago: Checks: unit and integration suites on 2.2.5 and on 2.2.6, which users already
   run; a new eval case, `designer-limit`, whose settings give the designer a low step limit:
   the designer reports at the limit, `spec.md` exists, and `lead` continues the designer's
   session rather than designing itself; it passes on the stand-in, then once on real models
