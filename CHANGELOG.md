@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-08
+
 ### Changed
 
 - The plugin, not `lead`, keeps the work folder `.ecmwf-multi-agents/` out of git: when a
@@ -247,7 +249,8 @@ helpers it hands work to.
 - Scenario evals (`make evals`) that compare the harness with plain opencode on a sample
   repository, using real models.
 
-[Unreleased]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.8.0...HEAD
+[Unreleased]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.9.0...HEAD
+[0.9.0]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.8.0...0.9.0
 [0.8.0]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.7.1...0.8.0
 [0.7.1]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/ecmwf/ecmwf-multi-agents/compare/0.6.0...0.7.0
