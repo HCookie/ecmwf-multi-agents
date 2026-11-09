@@ -45,7 +45,7 @@ answers land in `docs/research/` and `docs/adr/`.
 
 Steps cap the number of model turns a helper may take. They act as a cost limit. Each agent
 also gets a model and an effort from the active profile (see Profiles), and users can change
-`model`, `effort` and `steps` per agent in the settings file.
+`model`, `effort`, `fallback` and `steps` per agent in the settings file.
 
 At the limit opencode gives the agent one more turn, without tools, to report. It adds its
 notice for that turn as an assistant message, which models without assistant prefill (Claude
@@ -507,13 +507,16 @@ Changes take effect when opencode restarts.
   "max_helper_slots": 4,      // concurrent helpers, integer at least 1
   "agents": {                 // per-agent overrides, applied after the profile
     "builder": { "effort": "xhigh" },
-    "reviewer": { "model": "openai/gpt-6.1-sol", "effort": "high", "steps": 40 },
+    "reviewer": {
+      "model": "openai/gpt-6.1-sol", "effort": "high", "steps": 40,
+      "fallback": ["github-copilot/gpt-6.1-sol", { "model": "anthropic/claude-opus-5-5", "effort": "high" }]
+    },
     "tester": { "enabled": true }
   }
 }
 ```
 
-An `agents` entry may set `enabled`, `model` (`provider/model`), `effort` and `steps`.
+An `agents` entry may set `enabled`, `model` (`provider/model`), `effort`, `fallback` and `steps`.
 `enabled` switches a helper on or off: `true` or `false`, merged like the other fields, so a
 project's file can switch on a helper the user's file leaves off, or the other way round.
 `scout`, `builder` and `reviewer` default to on, `researcher`, `tester`, `designer` and
@@ -523,6 +526,21 @@ it is switched on. An override
 `model` replaces the profile's model and effort together, so the agent runs at the effort the
 entry names, or at the model's own default when it names none. An override `effort` alone
 applies to the profile's model. `steps` replaces the agent's step limit.
+
+`fallback` is an ordered list of other models for an agent, after its `model`. Each entry is
+`"provider/model"` or `{ "model": "provider/model", "effort": "..." }`; an entry's effort
+applies only to that model. It applies when opencode does not list the agent's model as
+available (its provider is unavailable, or the model is unknown or disabled): at startup and
+whenever opencode's provider or model lists change, the plugin gives the agent the first model
+in `model` then `fallback` that opencode lists. When it picks a fallback, it tells the user
+once which model runs. If no listed model is usable, the agent keeps its `model` and the
+plugin reports a problem. An agent without a fallback list is never checked or reported. If
+opencode's provider list cannot be read, every agent runs on its `model`. It does not react to errors during a run, such as rate limits or outages. `fallback` needs a
+`model` in the same entry, because it lists alternatives to that model (so under `inherit`
+set both); an empty list means no fallbacks. A later file's `fallback` replaces an earlier
+one for that agent, and a `model` without `fallback` drops the profile's list, since the
+user chose a different first model. Without the plugin, the generated agent files use only
+the main model, so `fallback` needs the plugin.
 
 `max_helper_slots` is an integer of at least 1, default 4. The plugin rewrites the one
 `Run at most N helpers at once.` instruction in `lead`, preserving the file-ownership rules

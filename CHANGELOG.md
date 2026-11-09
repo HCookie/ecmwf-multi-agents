@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow
 
 ## [Unreleased]
 
+### Added
+
+- Per-agent `fallback` setting: an ordered list of models (`"provider/model"` or
+  `{ "model": "...", "effort": "..." }`) the plugin uses, at startup and when providers change,
+  when opencode does not list an agent's own model as available. It needs the plugin and does
+  not react to rate limits or outages.
+
 ## [0.9.1] - 2026-11-08
 
 ### Fixed
