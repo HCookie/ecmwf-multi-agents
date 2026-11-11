@@ -128,6 +128,12 @@ describe("readAvailability", () => {
     expect(await readAvailability({ provider })).toEqual({ providers: ["a"] });
     expect(await readAvailability({ provider, model: { list: async () => Promise.reject(new Error("no")) } })).toEqual({ providers: ["a"] });
   });
+
+  test("a list that never answers counts as missing once the time is up", async () => {
+    const hang = () => new Promise<never>(() => {});
+    expect(await readAvailability({ provider: { list: hang } }, 10)).toBe("unknown");
+    expect(await readAvailability({ provider: { list: async () => [{ id: "a" }] }, model: { list: hang } }, 10)).toEqual({ providers: ["a"] });
+  });
 });
 
 describe("ModelChoices", () => {
@@ -159,7 +165,8 @@ describe("ModelChoices", () => {
       "x: lead runs on openai/gpt, its fallback number 1: anthropic/opus skipped: provider anthropic is not available",
       "x: stuck: none of its model and 1 fallback is usable, so anthropic/opus stays: anthropic/opus skipped: provider anthropic is not available; google/gem skipped: provider google is not available",
     ]);
-    expect(first.problems.map((problem) => problem.notify)).toEqual([false, true]);
+    // Both are shown: a review on another model than the one chosen is worth a toast.
+    expect(first.problems.map((problem) => problem.notify)).toEqual([true, true]);
     const lead = choices.plans().find((plan) => plan.id === "lead")!;
     expect(lead).toEqual({ id: "lead", model: "openai/gpt", effort: "high", fallback: plans[0]!.fallback });
     expect(choices.plans().find((plan) => plan.id === "stuck")).toEqual(plans[4]!);

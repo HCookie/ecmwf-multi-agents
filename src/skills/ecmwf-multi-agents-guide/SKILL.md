@@ -22,18 +22,18 @@ Four more helpers are off until you switch them on (see Settings):
 
 You can also switch off `scout`, `builder` or the reviewer for a project: `lead` then does that work itself, and with the reviewer off nothing is reviewed.
 
-`lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper ones, so sessions cost less. Where the profile allows, the reviewer and the tester use another model family, to catch shared mistakes.
+`lead` runs on the strongest model with the most effort, `scout` and `builder` on cheaper ones, so sessions cost less. Where the profile allows, the reviewer and the tester use a different model family, to catch mistakes the others share.
 
 ## Commands and typical use
 
-- New repository: start with `/onboard` (`/onboard <focus>` looks closer at one area). `lead` surveys the code and keeps a summary.
+- New repository: start with `/onboard` (`/onboard <focus>` looks closer at one area). `lead` surveys the code and keeps a short summary for later sessions.
 - A question or a small change: just ask.
-- Bigger work: `/plan <goal>`. `lead` asks questions, investigates, writes a plan and waits. Approve it or ask for changes, then run `/execute`, ideally in a fresh session: the plan file holds everything needed. `/execute` runs ready tasks, several at once in the background, ticks each off as it reports, and stops when it needs you; you can talk to `lead` meanwhile.
+- Bigger work: `/plan <goal>`. `lead` asks questions, investigates, writes a plan and waits. Approve it or ask for changes, then run `/execute`, ideally in a fresh session: the plan file holds everything needed. `/execute` runs ready tasks, several at once in the background, ticks each as its report arrives, and stops when it needs you; you can talk to `lead` meanwhile.
 - `/progress [plan]`: how far the current plan has got.
 - `/review [target]`: independent review, under any policy, of your uncommitted changes (no target), a branch, a pull request (number or URL) or a plan file. It replaces opencode's own `/review`.
 - `/guide [question]`: this guide.
 
-A project's own command or agent with the same name takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide each agent's model, effort and steps, the review policy, the helper limit and which helpers are on.
+A project's own command or agent with the same name, such as its own `/onboard`, takes precedence in that project, except `/review` and `/progress`. The settings, not an agent file, decide a harness agent's model, effort and steps, the review policy, the helper limit and which helpers are on.
 
 ## Review policy
 
@@ -62,11 +62,11 @@ Settings live in `~/.config/opencode/ecmwf-multi-agents.jsonc`. A project can ov
 }
 ```
 
-Each agent takes `model`, `effort` and `steps`; a helper also takes `enabled`, `true` or `false`. Effort is how hard a model thinks: more effort is slower and costs more. Values: `low`, `medium`, `high`, `xhigh`, `max`; some models also `none`. Defaults: `lead` xhigh, `builder` high, `scout` and reviewer medium. Effort needs a model, so under `inherit` set `model` too. `steps` caps an agent's turns, which limits cost.
+Each agent takes `model`, `effort`, `fallback` and `steps`; a helper also takes `enabled`, `true` or `false`. A project's file can switch on a helper that is off in yours, or the other way round. Effort is how hard a model thinks: more effort is slower and costs more. Values: `low`, `medium`, `high`, `xhigh`, `max`; some models also `none`. Defaults: `lead` xhigh, `builder` high, `scout` and reviewer medium. Effort needs a model, so under `inherit` set `model` too. `steps` caps an agent's turns, which limits cost.
 
-`fallback` lists models to try in order when an agent's `model` is not available: `"provider/model"` or `{ "model": "...", "effort": "..." }`. The plugin picks the first usable one at startup and when providers change, and tells you once. It ignores rate limits and outages, needs `model` in the same entry, and does nothing without the plugin.
+`max_helper_slots` tells `lead` how many helpers may run at once (default 4). More slots can run more builders, databases, dev servers and builds on the same machine; raise it with care. `/execute` and `/onboard` follow this limit.
 
-`max_helper_slots` tells `lead` how many helpers may run at once (default 4). More slots load the machine more; raise it with care.
+`fallback` lists models to try in order when an agent's `model` is not available: `"provider/model"` or `{ "model": "...", "effort": "..." }`. The plugin picks the first usable one at startup and when providers change, and shows a notice. It ignores rate limits and outages, needs `model` in the same entry, and does nothing without the plugin.
 
 Profiles give each agent a model and an effort:
 
@@ -77,13 +77,13 @@ Profiles give each agent a model and an effort:
 
 ## Helpers in the background
 
-`lead` usually waits for a helper. When it has other work meanwhile, or you may want to keep talking, it hands off in the background and the report arrives later. If `lead` is waiting on a helper and you want it back, press Ctrl+B to move the hand-off to the background.
+`lead` usually waits for a helper. When it has other work meanwhile, or you may want to keep talking, it hands off in the background and the report arrives later in your conversation. If `lead` is waiting on a helper and you want it back, press Ctrl+B to move the hand-off to the background.
 
-If a helper is doing something you do not want, tell `lead`: "redirect the scout: stay in src/" or "stop the builder". `lead` can list its helpers, send one an amendment it reads at its next step, or stop one. You cannot type in a helper's session yourself. A stopped helper reports nothing; its changes stay on disk.
+If a helper is doing something you do not want, tell `lead`: "redirect the scout: stay in src/" or "stop the builder". `lead` can list its helpers, send one an amendment it reads at its next step, keeping what it has read, or stop one. You cannot type in a helper's session yourself. A stopped helper reports nothing; its changes stay on disk.
 
 ## Work files
 
-Plans, notes, the onboarding summary and the optional helpers' folders live in `.ecmwf-multi-agents/` at the top of the repository, kept out of git.
+Plans, notes, the onboarding summary and the optional helpers' folders (`scratch`, `issues`, `design`, `data`) live in `.ecmwf-multi-agents/` at the top of the repository, kept out of git by `.git/info/exclude`.
 
 ## Safety
 

@@ -616,6 +616,54 @@ describe("v2 fallback models", () => {
     expect(scout(host)).toEqual(PRIMARY);
   });
 
+  test("activation while an event's read is still going waits for it, so the agents never show an unusable model", async () => {
+    const { host } = await run(["anthropic"]);
+    const list = host.ctx.provider!.list!;
+    let release = () => {};
+    host.ctx.provider = { list: () => new Promise<void>((resolve) => (release = resolve)).then(() => list()) };
+    const before = host.registrations;
+    host.emit("provider.updated");
+    await settle();
+    host.emit("plugin.updated");
+    await settle();
+    expect(host.registrations).toBe(before);
+    release();
+    await settle();
+    expect(scout(host)).toEqual(FALLBACK);
+    expect(host.registrations).toBe(before + 1);
+  });
+
+  test("registering again runs the old and the new transform in one rebuild, and lead's rules are not doubled", async () => {
+    const { host } = await run(["anthropic"]);
+    host.emit("plugin.updated");
+    await settle();
+    const settled = host.build().agents.get("lead")!.system;
+    const transform = host.ctx.agent.transform;
+    const during: unknown[] = [];
+    host.ctx.agent.transform = async (callback) => {
+      const registration = await transform(callback);
+      during.push(host.build().agents.get("lead")!.system);
+      return registration;
+    };
+    host.providers = ["openai", "anthropic"];
+    host.emit("provider.updated");
+    await settle();
+    expect(during).toEqual([settled]);
+    expect(host.build().agents.get("lead")!.system).toBe(settled);
+  });
+
+  test("a helper command run inline uses the chosen fallback when opencode does not name the agent's model", async () => {
+    const { host } = await run(["anthropic"]);
+    const switched: unknown[] = [];
+    host.ctx.session!.switchModel = async ({ model }) => void switched.push(model);
+    host.sessions.root = { agent: "lead" };
+    host.emit("plugin.updated");
+    await settle();
+    await host.commands().get("progress")!.execute({ sessionID: "root", prompt: { text: "export" } });
+    await settle();
+    expect(switched[0]).toEqual(FALLBACK);
+  });
+
   test("a failing model list leaves the choice to the providers", async () => {
     const { host } = await run(["openai", "anthropic"]);
     host.ctx.model = { list: async () => Promise.reject(new Error("unavailable")) };

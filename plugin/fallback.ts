@@ -5,9 +5,10 @@
 // [primary, ...fallback]. The caller reads opencode's provider and model lists into an
 // `Availability` snapshot (ids only, never credentials) and gets the choice back.
 //
-// opencode 2.2.6 (.ecmwf-multi-agents/notes/opencode-2.2.6-check.md): `provider.list` and
-// `model.list` return only what is available (a provider that is set up, an enabled chat model),
-// so being listed means being usable and the plugin does not recompute opencode's own rule.
+// opencode 2.2.5 and 2.2.6 (docs/research/opencode-v2.md, "Addendum: fallback models"):
+// `provider.list` and `model.list` return only what is available (a provider that is set up, an
+// enabled chat model), so being listed means being usable and the plugin does not recompute
+// opencode's own rule.
 //
 // `ModelChoices` keeps the current choice of every agent, shared by the agent transform and the
 // doctor check so both name the same model. Nothing here reads credentials or a provider's
@@ -94,11 +95,11 @@ export interface AvailabilitySource {
 export const READ_TIMEOUT_MS = 5000;
 
 /** The list in an answer, or undefined when the call is missing, throws, answers oddly or hangs. */
-async function entriesOf(read: () => unknown): Promise<unknown[] | undefined> {
+async function entriesOf(read: () => unknown, timeoutMs: number): Promise<unknown[] | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<undefined>((resolve) => {
-      timer = setTimeout(() => resolve(undefined), READ_TIMEOUT_MS);
+      timer = setTimeout(() => resolve(undefined), timeoutMs);
       (timer as { unref?: () => void }).unref?.();
     });
     const value = unwrap<unknown>(await Promise.race([Promise.resolve().then(read), timeout]));
@@ -120,14 +121,14 @@ function text(entry: unknown, key: string): string | undefined {
  * provider list is missing or fails; without a model list the choice rests on providers alone.
  * Only ids are read, so nothing secret passes through.
  */
-export async function readAvailability(source: AvailabilitySource): Promise<Availability> {
-  const providers = await entriesOf(() => source.provider?.list?.());
+export async function readAvailability(source: AvailabilitySource, timeoutMs = READ_TIMEOUT_MS): Promise<Availability> {
+  const providers = await entriesOf(() => source.provider?.list?.(), timeoutMs);
   if (providers === undefined) return "unknown";
   const ids = providers.flatMap((entry) => {
     const id = text(entry, "id");
     return id === undefined || text(entry, "activation") === "disabled" ? [] : [id];
   });
-  const models = await entriesOf(() => source.model?.list?.());
+  const models = await entriesOf(() => source.model?.list?.(), timeoutMs);
   if (models === undefined) return { providers: ids };
   return {
     providers: ids,
@@ -192,7 +193,7 @@ export class ModelChoices {
       if (signature !== before) update.changed = true;
       if (!this.active(plan.id)) continue;
       if (signature !== before && result.index > 0) {
-        update.problems.push({ message: `${this.name}: ${plan.id} runs on ${result.choice.model}, its fallback number ${result.index}: ${result.notes.join("; ")}`, notify: false });
+        update.problems.push({ message: `${this.name}: ${plan.id} runs on ${result.choice.model}, its fallback number ${result.index}: ${result.notes.join("; ")}`, notify: true });
       }
       const problem = result.problem === undefined ? undefined : `${this.name}: ${plan.id}: ${result.problem.message}`;
       if (problem === undefined) this.told.delete(plan.id);

@@ -532,15 +532,18 @@ applies to the profile's model. `steps` replaces the agent's step limit.
 applies only to that model. It applies when opencode does not list the agent's model as
 available (its provider is unavailable, or the model is unknown or disabled): at startup and
 whenever opencode's provider or model lists change, the plugin gives the agent the first model
-in `model` then `fallback` that opencode lists. When it picks a fallback, it tells the user
-once which model runs. If no listed model is usable, the agent keeps its `model` and the
-plugin reports a problem. An agent without a fallback list is never checked or reported. If
-opencode's provider list cannot be read, every agent runs on its `model`. It does not react to errors during a run, such as rate limits or outages. `fallback` needs a
-`model` in the same entry, because it lists alternatives to that model (so under `inherit`
-set both); an empty list means no fallbacks. A later file's `fallback` replaces an earlier
-one for that agent, and a `model` without `fallback` drops the profile's list, since the
-user chose a different first model. Without the plugin, the generated agent files use only
-the main model, so `fallback` needs the plugin.
+in `model` then `fallback` that opencode lists. When it picks a fallback, it says which model
+runs: once as a toast, and in `install.sh doctor` as information. If no listed model is usable,
+the agent keeps its `model` and the plugin reports a problem. An agent without a fallback list
+is never checked or reported. If opencode's provider list cannot be read, every agent runs on
+its `model`. It does not react to errors during a run, such as rate limits or outages.
+`fallback` needs a `model` in the same entry, because it lists alternatives to that model (so
+under `inherit` set both); an empty list means no fallbacks. A later file's `fallback` replaces
+an earlier one for that agent, and a `model` without `fallback` drops the earlier list, since
+the user chose the first model again: a project's file that names the same `model` as the
+user's file, without `fallback`, runs that agent without fallbacks. Without the plugin, the
+generated agent files use only the main model, so `fallback` needs the plugin
+(`docs/research/opencode-v2.md`, "Addendum: fallback models").
 
 `max_helper_slots` is an integer of at least 1, default 4. The plugin rewrites the one
 `Run at most N helpers at once.` instruction in `lead`, preserving the file-ownership rules
@@ -650,7 +653,10 @@ win. Two things win over files and config, with or without registration: `/revie
 `/progress`, which the plugin registers again after the command files, and the settings, which
 the late agent transform applies over every agent with a harness name (model, effort, step
 limit, and `lead`'s review line, helper limit and helper list). The same transform removes a
-default helper that the settings switch off, whatever brought it. A test compares the agents,
+default helper that the settings switch off, whatever brought it. For fallback models the
+plugin reads opencode's provider and model lists before it first registers the late transform,
+and again at each `provider.updated` and `model.updated`; when a choice changes, it registers
+the transform again, so the agents show the chosen model. A test compares the agents,
 commands and skills the plugin registers with those opencode loads from the generated files.
 
 Each agent's own permission rules win over the user's config either way. opencode's loader adds

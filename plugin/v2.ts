@@ -372,9 +372,10 @@ export function createSetup(harness: EmbeddedHarness, options: V2Options = {}) {
       const onActivation = () => {
         ruleOrder.start();
         void (async () => {
-          // The first read, when no `provider.updated` has made it yet, comes before the
+          // The first read, or the one a `provider.updated` started, comes before the
           // registration, so the agents never show a model that is not usable.
-          if (!availabilityRead) await readProviders();
+          if (!availabilityRead) void readProviders();
+          await reading;
           void agentTransform.register();
           void lateCommands?.register();
         })();
